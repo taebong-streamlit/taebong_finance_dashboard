@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 0. 페이지 기본 설정
 # ==========================================
-st.set_page_config(page_title="하태승의 연금자산 관리", page_icon="📈", layout="wide")
+st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈", layout="wide")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
@@ -27,15 +27,17 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 st.markdown(
     """
     <style>
-        .block-container { padding-top: 1.5rem; max-width: 1400px; }
+        .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 1400px; }
+        div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
+        div[data-testid="stElementContainer"] { margin-bottom: 0 !important; }
+        div[data-testid="stElementContainer"]:has(hr) { margin: 0.3rem 0 !important; }
         .dash-header {
             display:flex; justify-content:space-between; align-items:center;
-            background:#fff; padding:20px 28px; border-radius:16px;
+            background:#fff; padding:14px 28px; border-radius:16px;
             box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #e2e8f0;
-            margin-bottom:18px;
+            margin-bottom:6px;
         }
-        .dash-header h1 { font-size:1.4rem; font-weight:700; color:#0f172a; margin:0; }
-        .dash-header p { font-size:0.85rem; color:#475569; margin:4px 0 0 0; }
+        .dash-header h1 { font-size:2.8rem; font-weight:800; color:#0f172a; margin:0; }
         .status-badge {
             font-size:0.82rem; padding:6px 14px; border-radius:20px; font-weight:600;
         }
@@ -43,16 +45,17 @@ st.markdown(
         .status-success { background:#dcfce7; color:#166534; }
         .status-manual { background:#fee2e2; color:#991b1b; }
         .summary-card {
-            background:#fff; padding:18px 22px; border-radius:14px;
+            background:#fff; padding:12px 20px; border-radius:14px;
             box-shadow:0 2px 4px rgba(0,0,0,0.03); border:1px solid #e2e8f0;
-            border-left:5px solid #2563eb; margin-bottom:10px;
+            border-left:5px solid #2563eb;
         }
-        .summary-card label { font-size:0.8rem; color:#475569; font-weight:600; text-transform:uppercase; }
-        .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:6px; color:#0f172a; }
+        .summary-card label { font-size:1.2rem; color:#475569; font-weight:700; text-transform:uppercase; }
+        .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#0f172a; }
         .card-dc { border-left-color:#2563eb; }
         .card-pension { border-left-color:#10b981; }
         .card-irp { border-left-color:#8b5cf6; }
-        .source-info { margin-top:18px; text-align:center; font-size:0.8rem; color:#94a3b8; }
+        .source-info { margin-top:8px; text-align:center; font-size:0.8rem; color:#94a3b8; }
+        h3 { margin-top:0.2rem !important; margin-bottom:0.3rem !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -275,7 +278,7 @@ with header_col1:
         """
         <div class="dash-header">
             <div>
-                <h1>📈 하태승의 연금자산 관리</h1>
+                <h1>📈 태봉의 연금자산 관리</h1>
             </div>
         </div>
         """,
@@ -309,9 +312,7 @@ elif status["success"] > 0:
     badge_html = f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>'
 else:
     badge_html = '<span class="status-badge status-manual">⚠️ 실시간 연동 실패 (직접입력 모드)</span>'
-status_placeholder.markdown(badge_html, unsafe_allow_html=True)
-
-st.divider()
+st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 # ==========================================
 # 7. 요약 카드 (전체 계산 먼저 수행)
@@ -339,7 +340,7 @@ for i, key in enumerate(["dc", "pension", "irp"]):
             unsafe_allow_html=True,
         )
 
-st.divider()
+st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 # ==========================================
 # 8. 탭별 표 + 도넛 차트
@@ -354,27 +355,38 @@ DISPLAY_COLS = [
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         result_df, total_eval, cat_totals = computed[key]
-        st.subheader(f"{ACCOUNT_LABELS[key]} 포트폴리오")
+        st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
 
-        row_count = len(result_df)
+        # 목표비율은 0.20 같은 소수(비율)로 저장되어 있으므로 화면 표시용으로만 100을 곱한다.
+        # (여기서 곱하지 않으면 %.0f%% 포맷이 0.20을 그대로 정수화해 "0%"로 보이는 버그가 생긴다.)
+        display_df = result_df[DISPLAY_COLS].copy()
+        display_df["목표비율"] = display_df["목표비율"] * 100
+
+        row_count = len(display_df)
         table_height = 38 + 35 * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
 
         edited_df = st.data_editor(
-            result_df[DISPLAY_COLS],
+            display_df,
             use_container_width=True,
             hide_index=True,
             height=table_height,
             key=f"editor_{key}",
             column_config={
-                "구분": st.column_config.TextColumn("구분", disabled=True),
-                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="medium"),
-                "목표비율": st.column_config.NumberColumn("목표비율", disabled=True, format="%.0f%%"),
-                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d"),
-                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d"),
-                "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d"),
-                "현재비율": st.column_config.NumberColumn("현재비율", disabled=True, format="%.1f%%"),
-                "이평선(120일)": st.column_config.TextColumn("이평선(120일)", disabled=True),
-                "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d"),
+                "구분": st.column_config.TextColumn("구분", disabled=True, width="small", alignment="center"),
+                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="large"),
+                "목표비율": st.column_config.NumberColumn(
+                    "목표비율", disabled=True, format="%.0f%%", width="small", alignment="center"
+                ),
+                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width="small"),
+                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width="small"),
+                "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d", width="medium"),
+                "현재비율": st.column_config.NumberColumn(
+                    "현재비율", disabled=True, format="%.1f%%", width="small", alignment="center"
+                ),
+                "이평선(120일)": st.column_config.TextColumn(
+                    "이평선(120일)", disabled=True, width="small", alignment="center"
+                ),
+                "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d", width="small"),
                 "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width="medium"),
                 "네이버차트": st.column_config.LinkColumn(
                     "네이버 차트", display_text="📊 차트보기", width="small"
@@ -383,7 +395,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         )
 
         # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
-        if not edited_df[["현재가", "보유수량"]].equals(result_df[["현재가", "보유수량"]]):
+        if not edited_df[["현재가", "보유수량"]].equals(display_df[["현재가", "보유수량"]]):
             st.session_state.portfolio[key]["현재가"] = edited_df["현재가"].values
             st.session_state.portfolio[key]["보유수량"] = edited_df["보유수량"].values
             st.rerun()
