@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 # ==========================================
 # 0. 페이지 기본 설정
 # ==========================================
-st.set_page_config(page_title="연금 리밸런싱 대시보드", page_icon="📈", layout="wide")
+st.set_page_config(page_title="하태승의 연금자산 관리", page_icon="📈", layout="wide")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
@@ -64,9 +64,10 @@ st.markdown(
 BASE_PORTFOLIO = {
     "dc": [
         {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 5440},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.15, "보유수량": 4094},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 4094},
         {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 3300},
         {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 2131},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
         {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 14611},
         {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 1235},
         {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
@@ -74,9 +75,10 @@ BASE_PORTFOLIO = {
     ],
     "pension": [
         {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 2174},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.15, "보유수량": 1596},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 1596},
         {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 1320},
         {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 834},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
         {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 5770},
         {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 505},
         {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
@@ -84,9 +86,10 @@ BASE_PORTFOLIO = {
     ],
     "irp": [
         {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 925},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.15, "보유수량": 693},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 693},
         {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 565},
         {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 375},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
         {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 2499},
         {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 212},
         {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
@@ -96,7 +99,13 @@ BASE_PORTFOLIO = {
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
-CATEGORY_COLORS = {"주식": "#2563eb", "채권": "#f59e0b", "실물": "#eab308", "현금": "#94a3b8"}
+CATEGORY_COLORS = {
+    "주식": "#2563eb",
+    "채권": "#f59e0b",
+    "실물": "#eab308",
+    "리츠": "#10b981",
+    "현금": "#94a3b8",
+}
 
 # ==========================================
 # 3. 세션 상태 초기화 (현재가/보유수량은 수정 가능해야 하므로 세션에 보관)
@@ -266,8 +275,7 @@ with header_col1:
         """
         <div class="dash-header">
             <div>
-                <h1>📈 연금계좌 자산배분 & 실시간 리밸런싱 대시보드</h1>
-                <p>네이버 금융 실시간 시세 및 120일 이동평균선 기반</p>
+                <h1>📈 하태승의 연금자산 관리</h1>
             </div>
         </div>
         """,
@@ -339,7 +347,7 @@ st.divider()
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 
 DISPLAY_COLS = [
-    "구분", "ETF명", "코드", "목표비율", "현재가", "보유수량",
+    "구분", "ETF명", "목표비율", "현재가", "보유수량",
     "평가금액", "현재비율", "이평선(120일)", "목표수량", "조정필요", "네이버차트",
 ]
 
@@ -348,40 +356,40 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         result_df, total_eval, cat_totals = computed[key]
         st.subheader(f"{ACCOUNT_LABELS[key]} 포트폴리오")
 
-        table_col, chart_col = st.columns([3.2, 1])
-        with table_col:
-            edited_df = st.data_editor(
-                result_df[DISPLAY_COLS],
-                use_container_width=True,
-                hide_index=True,
-                key=f"editor_{key}",
-                column_config={
-                    "구분": st.column_config.TextColumn("구분", disabled=True),
-                    "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="medium"),
-                    "코드": st.column_config.TextColumn("코드", disabled=True),
-                    "목표비율": st.column_config.NumberColumn("목표비율", disabled=True, format="%.0f%%"),
-                    "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%d"),
-                    "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%d"),
-                    "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%d"),
-                    "현재비율": st.column_config.NumberColumn("현재비율", disabled=True, format="%.1f%%"),
-                    "이평선(120일)": st.column_config.TextColumn("이평선(120일)", disabled=True),
-                    "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%d"),
-                    "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width="medium"),
-                    "네이버차트": st.column_config.LinkColumn(
-                        "네이버 차트", display_text="📊 차트보기", width="small"
-                    ),
-                },
-            )
+        row_count = len(result_df)
+        table_height = 38 + 35 * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
 
-            # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
-            if not edited_df[["현재가", "보유수량"]].equals(result_df[["현재가", "보유수량"]]):
-                st.session_state.portfolio[key]["현재가"] = edited_df["현재가"].values
-                st.session_state.portfolio[key]["보유수량"] = edited_df["보유수량"].values
-                st.rerun()
+        edited_df = st.data_editor(
+            result_df[DISPLAY_COLS],
+            use_container_width=True,
+            hide_index=True,
+            height=table_height,
+            key=f"editor_{key}",
+            column_config={
+                "구분": st.column_config.TextColumn("구분", disabled=True),
+                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="medium"),
+                "목표비율": st.column_config.NumberColumn("목표비율", disabled=True, format="%.0f%%"),
+                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d"),
+                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d"),
+                "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d"),
+                "현재비율": st.column_config.NumberColumn("현재비율", disabled=True, format="%.1f%%"),
+                "이평선(120일)": st.column_config.TextColumn("이평선(120일)", disabled=True),
+                "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d"),
+                "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width="medium"),
+                "네이버차트": st.column_config.LinkColumn(
+                    "네이버 차트", display_text="📊 차트보기", width="small"
+                ),
+            },
+        )
 
-        with chart_col:
-            st.markdown(f"**{ACCOUNT_LABELS[key]} 자산 비중**")
-            render_donut(cat_totals, key)
+        # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
+        if not edited_df[["현재가", "보유수량"]].equals(result_df[["현재가", "보유수량"]]):
+            st.session_state.portfolio[key]["현재가"] = edited_df["현재가"].values
+            st.session_state.portfolio[key]["보유수량"] = edited_df["보유수량"].values
+            st.rerun()
+
+        st.markdown(f"**{ACCOUNT_LABELS[key]} 자산 비중**")
+        render_donut(cat_totals, key)
 
 st.markdown(
     '<div class="source-info">시세 제공 데이터: 네이버 금융 스크래핑 (현재가 · 120일 이동평균) | '
