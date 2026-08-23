@@ -359,13 +359,9 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         result_df, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
 
-        # 편집 가능해야 하는 현재가/보유수량은 NumberColumn으로 유지하고,
-        # 구분 열은 카테고리별 색상 이모지로 시각적 구분을 준다.
+        # 편집 가능해야 하는 현재가/보유수량은 NumberColumn으로 유지한다.
         # (참고: Streamlit 데이터에디터 셀에서는 마크다운 볼드(**text**)가 안정적으로 렌더링되지 않아 일반 텍스트로 표시합니다.)
         display_df = pd.DataFrame(index=result_df.index)
-        display_df["구분"] = result_df["구분"].apply(
-            lambda c: f"{CATEGORY_EMOJI.get(c, '⚫')} {c}"
-        )
         display_df["ETF명"] = result_df["ETF명"]
         display_df["목표비율"] = result_df["목표비율"] * 100
         display_df["현재가"] = result_df["현재가"]
@@ -378,34 +374,53 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         display_df["차트"] = result_df["네이버차트"]
 
         row_count = len(display_df)
-        table_height = 38 + 35 * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
+        row_height = 35
+        header_height = 38
+        table_height = header_height + row_height * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
 
-        edited_df = st.data_editor(
-            display_df,
-            use_container_width=False,  # 픽셀 폭을 그대로 써서 텍스트 길이에 맞는 좁은 표로 표시
-            hide_index=True,
-            height=table_height,
-            key=f"editor_{key}",
-            column_config={
-                "구분": st.column_config.TextColumn("구분", disabled=True, width=85, alignment="center"),
-                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width=250),
-                "목표비율": st.column_config.NumberColumn(
-                    "목표비율", disabled=True, format="%.0f%%", width=75, alignment="center"
-                ),
-                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width=95),
-                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width=95),
-                "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d", width=125),
-                "현재비율": st.column_config.NumberColumn(
-                    "현재비율", disabled=True, format="%.1f%%", width=80, alignment="center"
-                ),
-                "이평선(120일)": st.column_config.TextColumn(
-                    "이평선(120일)", disabled=True, width=95, alignment="center"
-                ),
-                "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d", width=90),
-                "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width=150),
-                "차트": st.column_config.LinkColumn("차트", display_text="📊 보기", width=70),
-            },
-        )
+        # "구분" 열은 Glide Data Grid의 alignment 옵션이 버전에 따라 제대로 반영되지 않는 문제가 있어
+        # 데이터에디터 밖에서 진짜 CSS(text-align/flex center)로 렌더링하는 배지 형태로 대체한다.
+        badge_col, table_col = st.columns([0.62, 6], gap="small")
+        with badge_col:
+            badge_rows = "".join(
+                f'<div style="height:{row_height}px; display:flex; align-items:center; justify-content:center;">'
+                f'<span style="background:{CATEGORY_COLORS.get(cat, "#94a3b8")}22; '
+                f'color:{CATEGORY_COLORS.get(cat, "#475569")}; font-weight:700; padding:2px 10px; '
+                f'border-radius:12px; font-size:0.82rem; white-space:nowrap;">{cat}</span></div>'
+                for cat in result_df["구분"]
+            )
+            st.markdown(
+                f'<div style="height:{header_height}px; display:flex; align-items:center; '
+                f'justify-content:center; font-weight:600; font-size:0.9rem; color:#31333f;">구분</div>'
+                f"{badge_rows}",
+                unsafe_allow_html=True,
+            )
+        with table_col:
+            edited_df = st.data_editor(
+                display_df,
+                use_container_width=False,  # 픽셀 폭을 그대로 써서 텍스트 길이에 맞는 좁은 표로 표시
+                hide_index=True,
+                height=table_height,
+                key=f"editor_{key}",
+                column_config={
+                    "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width=250),
+                    "목표비율": st.column_config.NumberColumn(
+                        "목표비율", disabled=True, format="%.0f%%", width=75, alignment="center"
+                    ),
+                    "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width=95),
+                    "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width=95),
+                    "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d", width=125),
+                    "현재비율": st.column_config.NumberColumn(
+                        "현재비율", disabled=True, format="%.1f%%", width=80, alignment="center"
+                    ),
+                    "이평선(120일)": st.column_config.TextColumn(
+                        "이평선(120일)", disabled=True, width=95, alignment="center"
+                    ),
+                    "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d", width=90),
+                    "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width=150),
+                    "차트": st.column_config.LinkColumn("차트", display_text="📊 보기", width=70),
+                },
+            )
 
         # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
         if not edited_df[["현재가", "보유수량"]].equals(display_df[["현재가", "보유수량"]]):
