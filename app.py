@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 통합 데이터 에디터 기반 완벽한 UI 동질감 구현
+- 그래픽 컬럼(Progress Bar)이 적용된 세련된 UI
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml
 실행: streamlit run app.py
 """
@@ -247,15 +247,15 @@ for key, df in st.session_state.portfolio.items():
     
     def rebalance_text(r):
         if r["코드"] == "" or r["목표비율"] == 0: return "-"
-        if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f}주 매수"
-        if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f}주 매도"
+        if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f} 매수"
+        if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f} 매도"
         return "유지"
     
     def ma_tag(r):
         if not r["코드"]: return "-"
         ma = fetch_ma120(r["코드"])
         if ma is None or not r["현재가"]: return "미확인"
-        return "🔴 상단" if r["현재가"] >= ma else "🔵 하단"
+        return "🔥 상단" if r["현재가"] >= ma else "🧊 하단"
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
     df_calc["이평선(120일)"] = df_calc.apply(ma_tag, axis=1)
@@ -281,29 +281,41 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         df_calc, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
         
-        # 통합 표를 위한 데이터프레임 가공 (비율 포맷팅)
+        # 통합 표를 위한 데이터프레임 가공
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '네이버차트']].copy()
-        display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
-        display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
+        
+        # 비율을 실수형(Float)로 변환하여 게이지 바로 표시되도록 세팅
+        display_df['현재비율'] = display_df['현재비율'].astype(float)
+        display_df['목표비율'] = (display_df['목표비율'] * 100).astype(float)
 
-        # Streamlit Data Editor로 전체 표 일체화 렌더링
+        # Streamlit Data Editor - 그래픽적 요소(Progress Bar 등) 적극 활용
         edited_df = st.data_editor(
             display_df,
             use_container_width=True,
             hide_index=True,
             key=f"editor_{key}",
             column_config={
-                "구분": st.column_config.TextColumn("구분", disabled=True, width="small"),
+                "구분": st.column_config.TextColumn("분류", disabled=True, width="small"),
                 "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="medium"),
-                "목표비율": st.column_config.TextColumn("목표비율", disabled=True, width="small"),
-                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", disabled=False),
-                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", disabled=False),
-                "평가금액": st.column_config.NumberColumn("평가금액(원)", format="%,d", disabled=True),
-                "현재비율": st.column_config.TextColumn("현재비율", disabled=True, width="small"),
-                "이평선(120일)": st.column_config.TextColumn("이평선", disabled=True, width="small"),
-                "목표수량": st.column_config.NumberColumn("목표수량", format="%,d", disabled=True),
-                "조정필요": st.column_config.TextColumn("조정필요", disabled=True),
-                "네이버차트": st.column_config.LinkColumn("네이버 차트", display_text="📊 차트보기", disabled=True)
+                "목표비율": st.column_config.NumberColumn("목표비율", format="%d %%", disabled=True, width="small"),
+                "현재가": st.column_config.NumberColumn("현재가 ✏️", min_value=0, step=1, format="%,d 원", disabled=False),
+                "보유수량": st.column_config.NumberColumn("보유수량 ✏️", min_value=0, step=1, format="%,d 주", disabled=False),
+                "평가금액": st.column_config.NumberColumn("평가금액", format="%,d 원", disabled=True),
+                
+                # 핵심! 현재비율을 단순 숫자가 아닌 미니 바 차트로 렌더링
+                "현재비율": st.column_config.ProgressColumn(
+                    "현재비율(%)", 
+                    help="전체 자산 대비 현재 비중",
+                    format="%.1f%%", 
+                    min_value=0, 
+                    max_value=100, 
+                    width="medium"
+                ),
+                
+                "이평선(120일)": st.column_config.TextColumn("120일선", disabled=True, width="small"),
+                "목표수량": st.column_config.NumberColumn("목표수량", format="%,d 주", disabled=True),
+                "조정필요": st.column_config.TextColumn("리밸런싱", disabled=True),
+                "네이버차트": st.column_config.LinkColumn("차트", display_text="📊 열기", disabled=True)
             }
         )
 
