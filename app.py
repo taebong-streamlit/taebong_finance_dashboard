@@ -109,6 +109,13 @@ CATEGORY_COLORS = {
     "리츠": "#10b981",
     "현금": "#94a3b8",
 }
+CATEGORY_EMOJI = {
+    "주식": "🔵",
+    "채권": "🟠",
+    "실물": "🟡",
+    "리츠": "🟢",
+    "현금": "⚪",
+}
 
 # ==========================================
 # 3. 세션 상태 초기화 (현재가/보유수량은 수정 가능해야 하므로 세션에 보관)
@@ -278,7 +285,7 @@ with header_col1:
         """
         <div class="dash-header">
             <div>
-                <h1>📈 태봉의 연금자산 관리</h1>
+                <h1>📈 하태봉의 연금자산 관리</h1>
             </div>
         </div>
         """,
@@ -347,52 +354,54 @@ st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_
 # ==========================================
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 
-DISPLAY_COLS = [
-    "구분", "ETF명", "목표비율", "현재가", "보유수량",
-    "평가금액", "현재비율", "이평선(120일)", "목표수량", "조정필요", "네이버차트",
-]
-
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         result_df, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
 
-        # 목표비율은 0.20 같은 소수(비율)로 저장되어 있으므로 화면 표시용으로만 100을 곱한다.
-        # (여기서 곱하지 않으면 %.0f%% 포맷이 0.20을 그대로 정수화해 "0%"로 보이는 버그가 생긴다.)
-        display_df = result_df[DISPLAY_COLS].copy()
-        display_df["목표비율"] = display_df["목표비율"] * 100
+        # 편집 가능해야 하는 현재가/보유수량은 NumberColumn(일반 굵기)으로 유지하고,
+        # 나머지 열은 MarkdownColumn으로 "**텍스트**" 볼드 처리 + 구분 열은 카테고리별 색상 이모지를 붙인다.
+        display_df = pd.DataFrame(index=result_df.index)
+        display_df["구분"] = result_df["구분"].apply(
+            lambda c: f"**{CATEGORY_EMOJI.get(c, '⚫')} {c}**"
+        )
+        display_df["ETF명"] = result_df["ETF명"].apply(lambda v: f"**{v}**")
+        display_df["목표비율"] = (result_df["목표비율"] * 100).apply(lambda v: f"**{v:.0f}%**")
+        display_df["현재가"] = result_df["현재가"]
+        display_df["보유수량"] = result_df["보유수량"]
+        display_df["평가금액"] = result_df["평가금액"].apply(lambda v: f"**{v:,.0f}**")
+        display_df["현재비율"] = result_df["현재비율"].apply(lambda v: f"**{v:.1f}%**")
+        display_df["이평선(120일)"] = result_df["이평선(120일)"].apply(lambda v: f"**{v}**")
+        display_df["목표수량"] = result_df["목표수량"].apply(lambda v: f"**{v:,.0f}**")
+        display_df["조정필요"] = result_df["조정필요"].apply(lambda v: f"**{v}**")
+        display_df["차트"] = result_df["네이버차트"]
 
         row_count = len(display_df)
         table_height = 38 + 35 * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
 
         edited_df = st.data_editor(
             display_df,
-            use_container_width=True,
+            use_container_width=False,  # 픽셀 폭을 그대로 써서 텍스트 길이에 맞는 좁은 표로 표시
             hide_index=True,
             height=table_height,
             key=f"editor_{key}",
             column_config={
-                "구분": st.column_config.TextColumn("구분", disabled=True, width="small", alignment="center"),
-                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="large"),
-                "목표비율": st.column_config.NumberColumn(
-                    "목표비율", disabled=True, format="%.0f%%", width="small", alignment="center"
-                ),
-                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width="small"),
-                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width="small"),
-                "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d", width="medium"),
-                "현재비율": st.column_config.NumberColumn(
-                    "현재비율", disabled=True, format="%.1f%%", width="small", alignment="center"
-                ),
-                "이평선(120일)": st.column_config.TextColumn(
-                    "이평선(120일)", disabled=True, width="small", alignment="center"
-                ),
-                "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d", width="small"),
-                "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width="medium"),
-                "네이버차트": st.column_config.LinkColumn(
-                    "네이버 차트", display_text="📊 차트보기", width="small"
-                ),
+                "구분": st.column_config.MarkdownColumn("구분", disabled=True, width=85, help=None),
+                "ETF명": st.column_config.MarkdownColumn("ETF명", disabled=True, width=250),
+                "목표비율": st.column_config.MarkdownColumn("목표비율", disabled=True, width=75),
+                "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width=95),
+                "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width=95),
+                "평가금액": st.column_config.MarkdownColumn("평가금액(원)", disabled=True, width=125),
+                "현재비율": st.column_config.MarkdownColumn("현재비율", disabled=True, width=80),
+                "이평선(120일)": st.column_config.MarkdownColumn("이평선(120일)", disabled=True, width=95),
+                "목표수량": st.column_config.MarkdownColumn("목표수량", disabled=True, width=90),
+                "조정필요": st.column_config.MarkdownColumn("조정필요", disabled=True, width=150),
+                "차트": st.column_config.LinkColumn("차트", display_text="📊 보기", width=70),
             },
         )
+
+        # 구분/목표비율/현재비율/이평선(120일) 열은 값이 짧아 시각적으로 중앙정렬처럼 보이도록
+        # 위에서 폭을 텍스트 길이에 딱 맞춰뒀다(글리드 데이터그리드 특성상 열별 강제 중앙정렬 API는 아직 없음).
 
         # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
         if not edited_df[["현재가", "보유수량"]].equals(display_df[["현재가", "보유수량"]]):
