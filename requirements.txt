@@ -1,4 +1,4 @@
-streamlit>=1.56
+streamlit>=1.60
 pandas
 requests
 beautifulsoup4
