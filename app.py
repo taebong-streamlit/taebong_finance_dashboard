@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 그래픽 컬럼(Progress Bar)이 적용된 세련된 UI
+- Pandas Styler 적용 (색상 동기화, 중앙 정렬, UI 통일)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml
 실행: streamlit run app.py
 """
@@ -247,8 +247,8 @@ for key, df in st.session_state.portfolio.items():
     
     def rebalance_text(r):
         if r["코드"] == "" or r["목표비율"] == 0: return "-"
-        if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f} 매수"
-        if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f} 매도"
+        if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f}주 매수"
+        if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f}주 매도"
         return "유지"
     
     def ma_tag(r):
@@ -274,6 +274,10 @@ for i, key in enumerate(["dc", "pension", "irp"]):
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
+# 스타일링 함수: 분류 텍스트 색상 및 중앙 정렬 
+def color_category(s):
+    return [f"color: {CATEGORY_COLORS.get(v, '#000')}; font-weight: bold;" for v in s]
+
 # 탭별 표 + 도넛 차트 렌더링
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
@@ -284,13 +288,20 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         # 통합 표를 위한 데이터프레임 가공
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '네이버차트']].copy()
         
-        # 비율을 실수형(Float)로 변환하여 게이지 바로 표시되도록 세팅
         display_df['현재비율'] = display_df['현재비율'].astype(float)
         display_df['목표비율'] = (display_df['목표비율'] * 100).astype(float)
 
-        # Streamlit Data Editor - 그래픽적 요소(Progress Bar 등) 적극 활용
+        # Pandas Styler를 적용하여 데이터프레임 서식 지정
+        styled_df = display_df.style\
+            .apply(color_category, subset=["구분"])\
+            .set_properties(**{"text-align": "center"})\
+            .set_table_styles([
+                {"selector": "th", "props": [("text-align", "center"), ("font-weight", "bold"), ("color", "black"), ("font-size", "14px")]}
+            ])
+
+        # Streamlit Data Editor - 스타일이 적용된 데이터프레임 사용
         edited_df = st.data_editor(
-            display_df,
+            styled_df,
             use_container_width=True,
             hide_index=True,
             key=f"editor_{key}",
@@ -301,8 +312,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 "현재가": st.column_config.NumberColumn("현재가 ✏️", min_value=0, step=1, format="%,d 원", disabled=False),
                 "보유수량": st.column_config.NumberColumn("보유수량 ✏️", min_value=0, step=1, format="%,d 주", disabled=False),
                 "평가금액": st.column_config.NumberColumn("평가금액", format="%,d 원", disabled=True),
-                
-                # 핵심! 현재비율을 단순 숫자가 아닌 미니 바 차트로 렌더링
                 "현재비율": st.column_config.ProgressColumn(
                     "현재비율(%)", 
                     help="전체 자산 대비 현재 비중",
@@ -311,7 +320,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     max_value=100, 
                     width="medium"
                 ),
-                
                 "이평선(120일)": st.column_config.TextColumn("120일선", disabled=True, width="small"),
                 "목표수량": st.column_config.NumberColumn("목표수량", format="%,d 주", disabled=True),
                 "조정필요": st.column_config.TextColumn("리밸런싱", disabled=True),
