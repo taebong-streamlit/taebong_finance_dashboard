@@ -56,25 +56,7 @@ st.markdown(
         .card-irp { border-left-color:#8b5cf6; }
         .source-info { margin-top:8px; text-align:center; font-size:0.8rem; color:#94a3b8; }
         h3 { margin-top:0.2rem !important; margin-bottom:0.3rem !important; }
-        div[data-testid="stHorizontalBlock"]:has(.category-badge-box) { gap: 0 !important; }
-        .category-badge-box {
-            border: 1px solid rgba(49, 51, 63, 0.2);
-            border-right: none;
-            border-radius: 8px 0 0 8px;
-            overflow: hidden;
-            background: #fff;
-            margin-right: -1px;
-        }
-        .category-badge-header {
-            height: 38px; display:flex; align-items:center; justify-content:center;
-            background:#f0f2f6; font-weight:600; font-size:0.9rem; color:#31333f;
-            border-bottom: 1px solid rgba(49, 51, 63, 0.2);
-        }
-        .category-badge-row {
-            height: 35px; display:flex; align-items:center; justify-content:center;
-            border-bottom: 1px solid rgba(49, 51, 63, 0.1);
-        }
-        .category-badge-row:last-child { border-bottom: none; }
+        div[data-testid="stHorizontalBlock"]:has(.html-block) { gap: 0 !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -292,7 +274,38 @@ def render_donut(cat_totals: dict, key: str):
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.15),
     )
-    st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
+    st.plotly_chart(fig, width="stretch", key=f"chart_{key}")
+
+
+def render_static_table(headers: list[str], rows: list[list[str]], widths: list[int], aligns: list[str], corner: str):
+    """편집이 필요 없는 열들을 진짜 HTML <table>로 렌더링한다 (완전한 중앙정렬/굵은 글씨/색상 제어 목적).
+    corner: 'left'(왼쪽 모서리만 둥글게), 'right'(오른쪽만), 'none'(둘 다 없음, 중간 블록용)"""
+    radius = {"left": "8px 0 0 8px", "right": "0 8px 8px 0", "none": "0"}[corner]
+    margin = "margin-right:-1px;" if corner == "left" else ("margin-left:-1px;" if corner == "right" else "")
+    total_width = sum(widths)
+    colgroup = "".join(f'<col style="width:{w}px;">' for w in widths)
+    thead_cells = "".join(
+        f'<th style="padding:0 6px; height:38px; font-weight:600; font-size:0.9rem; '
+        f'color:#31333f; border-bottom:1px solid rgba(49,51,63,0.2); text-align:center;">{h}</th>'
+        for h in headers
+    )
+    body_rows = ""
+    for row in rows:
+        cells = "".join(
+            f'<td style="padding:0 8px; height:35px; font-weight:700; font-size:0.85rem; '
+            f'white-space:nowrap; overflow:hidden; text-overflow:ellipsis; '
+            f'border-bottom:1px solid rgba(49,51,63,0.1); text-align:{a};">{v}</td>'
+            for v, a in zip(row, aligns)
+        )
+        body_rows += f"<tr>{cells}</tr>"
+    return (
+        f'<div class="html-block" style="display:inline-block; {margin} border:1px solid rgba(49,51,63,0.2); '
+        f'border-radius:{radius}; overflow:hidden; background:#fff; vertical-align:top;">'
+        f'<table style="border-collapse:collapse; width:{total_width}px; table-layout:fixed;">'
+        f'<colgroup>{colgroup}</colgroup>'
+        f'<thead><tr style="background:#f0f2f6;">{thead_cells}</tr></thead>'
+        f'<tbody>{body_rows}</tbody></table></div>'
+    )
 
 
 # ==========================================
@@ -311,7 +324,7 @@ with header_col1:
         unsafe_allow_html=True,
     )
 
-do_refresh = st.button("🔄 실시간 시세 강제 새로고침", use_container_width=False)
+do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
 status_placeholder = st.empty()
 
 if do_refresh:
@@ -378,72 +391,78 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         result_df, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
 
-        # 편집 가능해야 하는 현재가/보유수량은 NumberColumn으로 유지한다.
-        # (참고: Streamlit 데이터에디터 셀에서는 마크다운 볼드(**text**)가 안정적으로 렌더링되지 않아 일반 텍스트로 표시합니다.)
-        display_df = pd.DataFrame(index=result_df.index)
-        display_df["ETF명"] = result_df["ETF명"]
-        display_df["목표비율"] = result_df["목표비율"] * 100
-        display_df["현재가"] = result_df["현재가"]
-        display_df["보유수량"] = result_df["보유수량"]
-        display_df["평가금액"] = result_df["평가금액"]
-        display_df["현재비율"] = result_df["현재비율"]
-        display_df["이평선(120일)"] = result_df["이평선(120일)"]
-        display_df["목표수량"] = result_df["목표수량"]
-        display_df["조정필요"] = result_df["조정필요"]
-        display_df["차트"] = result_df["네이버차트"]
-
-        row_count = len(display_df)
+        row_count = len(result_df)
         row_height = 35
         header_height = 38
-        table_height = header_height + row_height * row_count + 3  # 헤더 + 전체 행이 스크롤 없이 보이도록 높이 계산
+        table_height = header_height + row_height * row_count + 3
 
-        # "구분" 열은 Glide Data Grid의 alignment 옵션이 버전에 따라 제대로 반영되지 않는 문제가 있어
-        # 데이터에디터 밖에서 진짜 CSS(text-align/flex center)로 렌더링하는 배지 형태로 대체한다.
-        badge_col, table_col = st.columns([0.62, 6], gap="small")
-        with badge_col:
-            badge_rows = "".join(
-                f'<div class="category-badge-row">'
+        # 편집 가능해야 하는 현재가/보유수량만 데이터에디터로 남기고,
+        # 나머지 열은 전부 진짜 HTML <table>로 렌더링해서 중앙정렬/굵은 글씨/색상을 완전히 제어한다.
+        edit_df = pd.DataFrame(index=result_df.index)
+        edit_df["현재가"] = result_df["현재가"]
+        edit_df["보유수량"] = result_df["보유수량"]
+
+        # 왼쪽 블록: 구분(색상 배지) / ETF명 / 목표비율
+        left_rows = []
+        for _, r in result_df.iterrows():
+            cat = r["구분"]
+            badge = (
                 f'<span style="background:{CATEGORY_COLORS.get(cat, "#94a3b8")}22; '
-                f'color:{CATEGORY_COLORS.get(cat, "#475569")}; font-weight:700; padding:2px 10px; '
-                f'border-radius:12px; font-size:0.82rem; white-space:nowrap;">{cat}</span></div>'
-                for cat in result_df["구분"]
+                f'color:{CATEGORY_COLORS.get(cat, "#475569")}; padding:2px 10px; '
+                f'border-radius:12px; font-size:0.82rem;">{cat}</span>'
             )
-            st.markdown(
-                f'<div class="category-badge-box">'
-                f'<div class="category-badge-header">구분</div>'
-                f"{badge_rows}"
-                f"</div>",
-                unsafe_allow_html=True,
+            left_rows.append([badge, r["ETF명"], f'{r["목표비율"] * 100:.0f}%'])
+        left_html = render_static_table(
+            headers=["구분", "ETF명", "목표비율"],
+            rows=left_rows,
+            widths=[85, 250, 75],
+            aligns=["center", "left", "center"],
+            corner="left",
+        )
+
+        # 오른쪽 블록: 평가금액 / 현재비율 / 이평선(120일) / 목표수량 / 조정필요 / 차트
+        right_rows = []
+        for _, r in result_df.iterrows():
+            chart_cell = (
+                f'<a href="{r["네이버차트"]}" target="_blank" style="text-decoration:none; '
+                f'color:#2563eb;">📊 보기</a>' if r["네이버차트"] else "-"
             )
-        with table_col:
+            right_rows.append([
+                f'{r["평가금액"]:,.0f}',
+                f'{r["현재비율"]:.1f}%',
+                r["이평선(120일)"],
+                f'{r["목표수량"]:,.0f}',
+                r["조정필요"],
+                chart_cell,
+            ])
+        right_html = render_static_table(
+            headers=["평가금액(원)", "현재비율", "이평선(120일)", "목표수량", "조정필요", "차트"],
+            rows=right_rows,
+            widths=[125, 80, 95, 90, 150, 70],
+            aligns=["right", "center", "center", "right", "center", "center"],
+            corner="right",
+        )
+
+        left_col, mid_col, right_col = st.columns([410, 195, 610], gap="small")
+        with left_col:
+            st.markdown(left_html, unsafe_allow_html=True)
+        with mid_col:
             edited_df = st.data_editor(
-                display_df,
-                use_container_width=False,  # 픽셀 폭을 그대로 써서 텍스트 길이에 맞는 좁은 표로 표시
+                edit_df,
+                width="content",
                 hide_index=True,
                 height=table_height,
                 key=f"editor_{key}",
                 column_config={
-                    "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width=250),
-                    "목표비율": st.column_config.NumberColumn(
-                        "목표비율", disabled=True, format="%.0f%%", width=75, alignment="center"
-                    ),
                     "현재가": st.column_config.NumberColumn("현재가(원)", min_value=0, step=1, format="%,d", width=95),
                     "보유수량": st.column_config.NumberColumn("보유수량", min_value=0, step=1, format="%,d", width=95),
-                    "평가금액": st.column_config.NumberColumn("평가금액(원)", disabled=True, format="%,d", width=125),
-                    "현재비율": st.column_config.NumberColumn(
-                        "현재비율", disabled=True, format="%.1f%%", width=80, alignment="center"
-                    ),
-                    "이평선(120일)": st.column_config.TextColumn(
-                        "이평선(120일)", disabled=True, width=95, alignment="center"
-                    ),
-                    "목표수량": st.column_config.NumberColumn("목표수량", disabled=True, format="%,d", width=90),
-                    "조정필요": st.column_config.TextColumn("조정필요", disabled=True, width=150),
-                    "차트": st.column_config.LinkColumn("차트", display_text="📊 보기", width=70),
                 },
             )
+        with right_col:
+            st.markdown(right_html, unsafe_allow_html=True)
 
         # 사용자가 현재가/보유수량을 직접 수정한 경우 세션에 반영
-        if not edited_df[["현재가", "보유수량"]].equals(display_df[["현재가", "보유수량"]]):
+        if not edited_df.equals(edit_df):
             st.session_state.portfolio[key]["현재가"] = edited_df["현재가"].values
             st.session_state.portfolio[key]["보유수량"] = edited_df["보유수량"].values
             st.rerun()
