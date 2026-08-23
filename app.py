@@ -56,6 +56,25 @@ st.markdown(
         .card-irp { border-left-color:#8b5cf6; }
         .source-info { margin-top:8px; text-align:center; font-size:0.8rem; color:#94a3b8; }
         h3 { margin-top:0.2rem !important; margin-bottom:0.3rem !important; }
+        div[data-testid="stHorizontalBlock"]:has(.category-badge-box) { gap: 0 !important; }
+        .category-badge-box {
+            border: 1px solid rgba(49, 51, 63, 0.2);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            overflow: hidden;
+            background: #fff;
+            margin-right: -1px;
+        }
+        .category-badge-header {
+            height: 38px; display:flex; align-items:center; justify-content:center;
+            background:#f0f2f6; font-weight:600; font-size:0.9rem; color:#31333f;
+            border-bottom: 1px solid rgba(49, 51, 63, 0.2);
+        }
+        .category-badge-row {
+            height: 35px; display:flex; align-items:center; justify-content:center;
+            border-bottom: 1px solid rgba(49, 51, 63, 0.1);
+        }
+        .category-badge-row:last-child { border-bottom: none; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -383,16 +402,17 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         badge_col, table_col = st.columns([0.62, 6], gap="small")
         with badge_col:
             badge_rows = "".join(
-                f'<div style="height:{row_height}px; display:flex; align-items:center; justify-content:center;">'
+                f'<div class="category-badge-row">'
                 f'<span style="background:{CATEGORY_COLORS.get(cat, "#94a3b8")}22; '
                 f'color:{CATEGORY_COLORS.get(cat, "#475569")}; font-weight:700; padding:2px 10px; '
                 f'border-radius:12px; font-size:0.82rem; white-space:nowrap;">{cat}</span></div>'
                 for cat in result_df["구분"]
             )
             st.markdown(
-                f'<div style="height:{header_height}px; display:flex; align-items:center; '
-                f'justify-content:center; font-weight:600; font-size:0.9rem; color:#31333f;">구분</div>'
-                f"{badge_rows}",
+                f'<div class="category-badge-box">'
+                f'<div class="category-badge-header">구분</div>'
+                f"{badge_rows}"
+                f"</div>",
                 unsafe_allow_html=True,
             )
         with table_col:
