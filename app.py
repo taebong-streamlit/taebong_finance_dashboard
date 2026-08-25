@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 연동
-- 이평선(120일) 변경 시 동일 종목 전 계좌 자동 연동 기능 추가
+- 이평선 셀 배경 음영 제거 및 글자 색상(상단:빨강, 하단:파랑)만 표시
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml html5lib streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -248,13 +248,14 @@ function(params) {
 }
 """)
 
+# 이평선(상단: 빨간 글씨, 하단: 파란 글씨) - 배경 음영 제거
 ma_color_jscode = JsCode("""
 function(params) {
     var val = params.value;
     if (val === '상단') {
-        return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center', 'backgroundColor': '#fee2e2'};
+        return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'};
     } else if (val === '하단') {
-        return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center', 'backgroundColor': '#dbeafe'};
+        return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'};
     }
     return {'textAlign': 'center', 'color': '#64748b'};
 }
@@ -391,7 +392,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
-gridOptions = gb.build()
+        gridOptions = gb.build()
 
         grid_response = AgGrid(
             display_df,
@@ -432,14 +433,12 @@ gridOptions = gb.build()
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
                     
-                    # 🔥 이평선이 변경된 경우, 동일한 종목(ETF명 또는 코드)을 가진 모든 계좌의 이평선도 일괄 동기화 🔥
                     updated_mas = []
                     for idx, row in st.session_state.portfolio[key].iterrows():
                         etf_name = row["ETF명"]
                         new_val = new_mas[idx]
                         updated_mas.append(new_val)
                         
-                        # 다른 계좌들의 동일 ETF명 이평선도 함께 변경
                         for other_k in st.session_state.portfolio.keys():
                             mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
                             st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
