@@ -1,6 +1,7 @@
-streamlit>=1.60
+streamlit>=1.30
 pandas
 requests
 beautifulsoup4
 plotly
 lxml
+streamlit-aggrid
