@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 제목 박스 제거 및 버튼/탭 가독성(UI) 완벽 개선 적용
+- 제목 윗단 짤림 현상 방지(상단 여백 추가) 및 비활성 탭 텍스트 화이트(#ffffff) 고정
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 가독성 해결)
+# 1. 스타일 세팅 (다크 배경 + 가독성/여백 해결)
 # ==========================================
 st.markdown(
     """
@@ -34,17 +34,18 @@ st.markdown(
             color: #f8fafc;
         }
         
-        .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
+        /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 (0.8rem -> 2.5rem) */
+        .block-container { padding-top: 2.5rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 탭(Tab) 글자색 강제 고정 (마우스 호버 전에도 잘 보이게) */
+        /* 탭(Tab) 글자색 강제 고정 (선택되지 않은 탭도 완전한 하얀색으로 보이게) */
         button[data-baseweb="tab"] p {
-            color: #94a3b8 !important; /* 평상시 밝은 회색 */
+            color: #ffffff !important; /* 평상시 완전 흰색 */
             font-size: 1.15rem !important;
-            font-weight: 600 !important;
+            font-weight: 500 !important; /* 굵기 기본 */
         }
         button[data-baseweb="tab"][aria-selected="true"] p {
-            color: #ffffff !important; /* 선택된 탭은 완전 흰색 */
-            font-weight: 800 !important;
+            color: #ffffff !important; /* 선택된 탭 흰색 */
+            font-weight: 900 !important; /* 선택된 탭은 확실히 더 굵게 표시 */
         }
         
         /* 새로고침 버튼 글자색 강제 고정 */
@@ -278,8 +279,8 @@ amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleStri
 # ==========================================
 header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
-    # 박스를 벗겨내고 크고 깔끔한 텍스트 폰트로만 제목 적용
-    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#f8fafc; margin-bottom: 20px; padding-top: 15px;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
+    # margin-top과 line-height 조정을 통해 윗부분 잘림 완벽 방지
+    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#f8fafc; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
 do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
 
