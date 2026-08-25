@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 텍스트 기반 비율 표시 및 특정 열 중앙 정렬 적용
+- 텍스트 기반 비율 표시 및 강제 중앙 정렬 적용
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml
 실행: streamlit run app.py
 """
@@ -274,9 +274,9 @@ for i, key in enumerate(["dc", "pension", "irp"]):
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
-# 스타일링 함수: 분류 텍스트 색상
-def color_category(s):
-    return [f"color: {CATEGORY_COLORS.get(v, '#000')}; font-weight: bold;" for v in s]
+# 스타일링 함수: 분류 텍스트 색상 및 강제 중앙 정렬 동시 적용
+def style_category(s):
+    return [f"color: {CATEGORY_COLORS.get(v, '#000')}; font-weight: bold; text-align: center;" for v in s]
 
 # 탭별 표 + 도넛 차트 렌더링
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
@@ -291,10 +291,10 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
 
-        # Pandas Styler를 적용하여 데이터프레임 서식 지정 (지정한 열 중앙 정렬)
+        # Pandas Styler를 적용하여 데이터프레임 서식 지정
         styled_df = display_df.style\
-            .apply(color_category, subset=["구분"])\
-            .set_properties(subset=["구분", "목표비율", "현재비율", "이평선(120일)", "네이버차트"], **{"text-align": "center"})\
+            .apply(style_category, subset=["구분"])\
+            .set_properties(subset=["목표비율", "현재비율", "이평선(120일)", "네이버차트"], **{"text-align": "center"})\
             .set_properties(subset=["ETF명"], **{"text-align": "left"})\
             .set_table_styles([
                 {"selector": "th", "props": [("text-align", "center"), ("font-weight", "bold"), ("color", "black"), ("font-size", "14px")]}
