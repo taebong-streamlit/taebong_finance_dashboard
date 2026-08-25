@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 (데이터/헤더 중앙정렬 및 ETF명만 왼쪽 정렬)
+- 전문 AgGrid 라이브러리 (열별 맞춤 정렬 및 고대비 색상 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -216,7 +216,7 @@ class ChartLinkRenderer {
         if (params.value && params.value !== '') {
             this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
         } else {
-            this.eGui.innerHTML = '<span>-</span>';
+            this.eGui.innerHTML = '<span style="color: #000;">-</span>';
         }
     }
     getGui() {
@@ -326,23 +326,25 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 모든 데이터 셀 중앙 정렬
-        gb.configure_default_column(cellStyle={'textAlign': 'center'})
+        # 기본 셀: 텍스트는 진한 검정색(#000000), 기본 정렬은 중앙으로 설정
+        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         
-        # 각 열 설정 (ETF명 열에만 cellStyle로 왼쪽 정렬 강제 주입)
+        # 개별 열 맞춤 정렬 및 진한 글자색 세팅
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=280, editable=False, cellStyle={'textAlign': 'left'})
+        gb.configure_column("ETF명", width=280, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'})
         gb.configure_column("목표비율", width=100, editable=False)
         
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120)
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=120)
+        # 우측 정렬 대상 (금액, 수량, 비율 등)
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=120, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("평가금액", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("현재비율", width=100, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("목표수량", width=120, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         
-        gb.configure_column("평가금액", width=130, editable=False)
-        gb.configure_column("현재비율", width=100, editable=False)
+        # 좌측 정렬 대상
+        gb.configure_column("조정필요", width=140, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
+        
         gb.configure_column("이평선(120일)", width=110, editable=False)
-        gb.configure_column("목표수량", width=120, editable=False)
-        gb.configure_column("조정필요", width=140, editable=False)
-        
         gb.configure_column("차트", cellRenderer=chart_link, width=90, editable=False)
 
         gridOptions = gb.build()
