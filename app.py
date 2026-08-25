@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 (데이터 및 헤더 완벽 중앙 정렬 적용)
+- 전문 AgGrid 라이브러리 (데이터 및 헤더 완벽 중앙 정렬, 차트 링크 렌더링 수정)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -209,12 +209,20 @@ function(params) {
 }
 """)
 
+# (수정) AgGrid에서 차트 링크가 텍스트가 아닌 실제 클릭 가능한 링크로 나타나도록 클래스형 렌더러로 강력하게 제어
 chart_link = JsCode("""
-function(params) {
-    if (params.value && params.value !== '') {
-        return '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
+class ChartLinkRenderer {
+    init(params) {
+        this.eGui = document.createElement('div');
+        if (params.value && params.value !== '') {
+            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
+        } else {
+            this.eGui.innerHTML = '<span>-</span>';
+        }
     }
-    return '-';
+    getGui() {
+        return this.eGui;
+    }
 }
 """)
 
@@ -283,7 +291,9 @@ for key, df in st.session_state.portfolio.items():
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
     df_calc["이평선(120일)"] = df_calc.apply(ma_tag, axis=1)
-    df_calc["네이버차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
+    
+    # (수정) "네이버차트" 대신 "차트"로 열 이름 변경
+    df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
     computed[key] = (df_calc, total_eval, cat_totals)
@@ -297,7 +307,7 @@ for i, key in enumerate(["dc", "pension", "irp"]):
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 
-# 헤더를 완벽하게 중앙 정렬하기 위한 커스텀 CSS 주입 선언
+# 헤더를 완벽하게 중앙 정렬하기 위한 커스텀 CSS 주입
 custom_css = {
     ".ag-header-cell-label": {"justify-content": "center !important"},
     ".ag-header-cell": {"text-align": "center !important"}
@@ -310,7 +320,8 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         df_calc, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
         
-        display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '네이버차트']].copy()
+        # (수정) "차트" 열 적용
+        display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
         
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
@@ -334,18 +345,20 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("이평선(120일)", width=110, editable=False)
         gb.configure_column("목표수량", width=120, editable=False)
         gb.configure_column("조정필요", width=140, editable=False)
-        gb.configure_column("네이버차트", cellRenderer=chart_link, width=100, editable=False)
+        
+        # (수정) 변경된 렌더러 적용 (차트)
+        gb.configure_column("차트", cellRenderer=chart_link, width=90, editable=False)
 
         gridOptions = gb.build()
 
-        # AgGrid 렌더링 및 커스텀 CSS 적용
+        # AgGrid 렌더링
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
             update_mode=GridUpdateMode.VALUE_CHANGED, 
             allow_unsafe_jscode=True, 
             theme='alpine', 
-            custom_css=custom_css, # 바로 이 부분이 헤더 중앙 정렬을 강제합니다
+            custom_css=custom_css,
             key=f"grid_{key}"
         )
 
