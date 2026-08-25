@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 탭 메뉴 텍스트 투명도 강제 해제 및 완벽한 가독성 확보
+- 탭(Tab) 메뉴 버튼형 디자인으로 전면 개편 (노란색/파란색 고대비 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 가독성/여백 해결)
+# 1. 스타일 세팅 (다크 배경 + 탭 디자인 전면 개편)
 # ==========================================
 st.markdown(
     """
@@ -37,21 +37,34 @@ st.markdown(
         /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 */
         .block-container { padding-top: 2.5rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 🔥 탭(Tab) 글자색 및 투명도 완벽 고정 (스트림릿의 강제 회색화 무력화) 🔥 */
+        /* 🔥 탭(Tab) 디자인 완전히 새로 쓰기 (보호색 현상 원천 차단) 🔥 */
+        div[data-baseweb="tab-list"] {
+            gap: 10px; /* 탭 사이 간격 */
+        }
         button[data-baseweb="tab"] {
-            opacity: 1 !important; /* 선택 안 된 탭의 투명도를 강제로 100%로 끌어올림 */
+            opacity: 1 !important; 
+            background-color: #1e293b !important; /* 비활성 탭 배경: 남색 */
+            border: 1px solid #334155 !important;
+            border-bottom: none !important;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 10px 24px !important;
         }
         button[data-baseweb="tab"] p, 
         button[data-baseweb="tab"] span {
-            color: #ffffff !important; /* 평상시 무조건 완전한 흰색 */
+            color: #fde047 !important; /* 🌟 비활성 탭 글씨: 밝은 레몬/노란색으로 확 띄게! */
             font-size: 1.2rem !important;
-            font-weight: 600 !important; 
+            font-weight: 700 !important; 
             opacity: 1 !important; 
         }
-        /* 현재 선택된 탭은 눈에 확 띄는 파란색으로 강조! */
+        
+        /* 현재 선택된 활성 탭은 배경 자체를 파란색으로! */
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #3b82f6 !important; /* 활성 탭 배경: 밝은 파란색 */
+            border-color: #3b82f6 !important;
+        }
         button[data-baseweb="tab"][aria-selected="true"] p,
         button[data-baseweb="tab"][aria-selected="true"] span {
-            color: #60a5fa !important; /* 네온 블루 */
+            color: #ffffff !important; /* 활성 탭 글씨: 완전 흰색 */
             font-weight: 900 !important; 
         }
         
@@ -430,13 +443,13 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         chart_col, info_col = st.columns([1, 1.3]) 
         
         with chart_col:
-            st.markdown(f"<h4 style='text-align: center; color: #ffffff;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
             render_donut(cat_totals, key)
             
         with info_col:
             rule_html = """
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
-                <h4 style="margin-top: 0; color: #ffffff; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+                <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
                 <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
