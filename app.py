@@ -1,11 +1,13 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 탭 메뉴 1.5배 확대 및 비활성 탭 글자색 '밝은 노란색(#fde047)' 강제 고정
+- 보유수량 변경 시 JSON 파일 자동 저장 기능(영속성) 추가
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
 
+import os
+import json
 import time
 import requests
 import pandas as pd
@@ -16,19 +18,20 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
 
 # ==========================================
-# 0. 페이지 기본 설정
+# 0. 페이지 기본 설정 및 파일 저장 경로
 # ==========================================
 st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈", layout="wide")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+DATA_FILE = "portfolio_data.json"
 
 # ==========================================
-# 1. 스타일 세팅 (탭 가독성 완벽 해결)
+# 1. 스타일 세팅 (다크 배경 + 탭 디자인 강제 제어)
 # ==========================================
 st.markdown(
     """
     <style>
-        /* 전체 배경 어두운 네이비톤 */
+        /* 전체 배경을 어두운 네이비톤으로 유지 */
         .stApp {
             background-color: #0f172a;
             color: #f8fafc;
@@ -41,26 +44,28 @@ st.markdown(
             max-width: 95%; 
         }
         
-        /* 🔥 탭(Tab) 글자 크기 1.5배 확대 및 색상 강제 지정 🔥 */
-        
-        /* 1. 비활성 탭 (연금저축, IRP 등) - 밝은 노란색(#fde047)으로 확실하게 보이게 고정 */
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] {
-            opacity: 1 !important;
+        /* 탭(Tab) 폰트 1.5배 확대 및 색상 강제 지정 */
+        button[data-baseweb="tab"] {
+            opacity: 1 !important; 
         }
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] *,
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] p {
-            font-size: 24px !important; /* 1.5배 확대 */
+        
+        /* 비활성 탭 (연금저축, IRP) */
+        button[data-baseweb="tab"][aria-selected="false"] p,
+        button[data-baseweb="tab"][aria-selected="false"] span,
+        button[data-baseweb="tab"][aria-selected="false"] div {
+            font-size: 1.5rem !important;
             font-weight: 800 !important; 
-            color: #fde047 !important; /* 눈에 확 띄는 밝은 노란색 */
+            color: #ffffff !important; 
             opacity: 1 !important;
         }
 
-        /* 2. 활성 탭 (현재 선택된 탭 - DC형 퇴직연금) - 빨간색 밑줄에 어울리는 선명한 빨간색 */
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] *,
-        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] p {
-            font-size: 24px !important; /* 1.5배 확대 */
+        /* 활성 탭 (DC형 퇴직연금) */
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span,
+        button[data-baseweb="tab"][aria-selected="true"] div {
+            font-size: 1.5rem !important;
             font-weight: 900 !important; 
-            color: #ff4b4b !important; /* 선명한 빨간색 */
+            color: #ff4b4b !important; 
         }
         
         /* 새로고침 버튼 디자인 */
@@ -104,9 +109,9 @@ st.markdown(
 )
 
 # ==========================================
-# 2. 포트폴리오 기본 데이터
+# 2. 포트폴리오 기본 데이터 (파일 입출력 연동)
 # ==========================================
-BASE_PORTFOLIO = {
+DEFAULT_PORTFOLIO = {
     "dc": [
         {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 5440},
         {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 4094},
@@ -142,6 +147,42 @@ BASE_PORTFOLIO = {
     ],
 }
 
+def load_portfolio_from_file():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                saved_data = json.load(f)
+                portfolio = {}
+                for key, items in saved_data.items():
+                    df = pd.DataFrame(items)
+                    if "현재가" not in df.columns:
+                        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
+                    portfolio[key] = df
+                return portfolio
+        except Exception:
+            pass
+    
+    # 파일이 없거나 오류 발생 시 기본값으로 세팅 후 저장
+    portfolio = {}
+    for key, items in DEFAULT_PORTFOLIO.items():
+        df = pd.DataFrame(items)
+        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
+        portfolio[key] = df
+    save_portfolio_to_file(portfolio)
+    return portfolio
+
+def save_portfolio_to_file(portfolio_dict):
+    try:
+        data_to_save = {}
+        for key, df in portfolio_dict.items():
+            # 필요한 컬럼만 추출하여 dict 형태로 변환
+            sub_df = df[["구분", "ETF명", "코드", "목표비율", "보유수량"]].copy()
+            data_to_save[key] = sub_df.to_dict(orient="records")
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass
+
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
 CATEGORY_COLORS = {
@@ -153,15 +194,10 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 3. 세션 상태 초기화
+# 3. 세션 상태 초기화 (파일 연동)
 # ==========================================
 if "portfolio" not in st.session_state:
-    portfolio = {}
-    for key, items in BASE_PORTFOLIO.items():
-        df = pd.DataFrame(items)
-        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
-        portfolio[key] = df
-    st.session_state.portfolio = portfolio
+    st.session_state.portfolio = load_portfolio_from_file()
 
 if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
@@ -432,6 +468,9 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all():
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
+                    
+                    # 🔥 보유수량 등이 변경되면 즉시 JSON 파일로 자동 저장 🔥
+                    save_portfolio_to_file(st.session_state.portfolio)
                     st.rerun()
 
         st.write("") 
