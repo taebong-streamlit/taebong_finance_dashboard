@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 네이버 금융 실시간 시세 + 120일 이동평균선 실계산 (판정 로직 정밀 개선)
-필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
+- 네이버 금융 실시간 시세 + 120일 이동평균선 실계산 (BeautifulSoup 안정성 강화 버전)
+필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml html5lib streamlit-aggrid
 실행: streamlit run app.py
 """
 
@@ -176,7 +176,7 @@ if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
 # ==========================================
-# 4. 실시간 시세 & 120일 이동평균 스크래핑 (판정 로직 개선)
+# 4. 실시간 시세 & 120일 이동평균 스크래핑 (안정화 버전)
 # ==========================================
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_current_price(code: str):
@@ -197,22 +197,33 @@ def fetch_ma120(code: str):
     if not code: return None
     closes = []
     try:
-        # 네이버 금융 일별 시세 테이블을 안전하게 읽어오기 위해 6페이지(약 60거래일~120거래일) 순회
-        for page in range(1, 7):
+        # 네이버 금융 일별 시세 페이지를 페이지별로 탐색하여 종가 추출 (최대 13페이지 = 약 130거래일)
+        for page in range(1, 14):
             url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page={page}"
             res = requests.get(url, headers=HEADERS, timeout=3)
-            dfs = pd.read_html(res.text, header=0)
-            if len(dfs) > 0:
-                df = dfs[0].dropna(subset=["종가"])
-                if not df.empty:
-                    prices = df["종가"].astype(int).tolist()
-                    closes.extend(prices)
+            soup = BeautifulSoup(res.text, "html.parser")
+            rows = soup.select("table.type2 tr")
+            got_data = False
+            for row in rows:
+                tds = row.find_all("td")
+                if len(tds) >= 2:
+                    price_span = tds[1].find("span")
+                    date_td = tds[0].find("span")
+                    if price_span and date_td and date_td.text.strip():
+                        try:
+                            val = int(price_span.text.strip().replace(",", ""))
+                            closes.append(val)
+                            got_data = True
+                        except ValueError:
+                            continue
+            if not got_data and page > 2:
+                break
             time.sleep(0.02)
     except Exception:
         pass
     
     if len(closes) < 20: return None
-    # 수집된 데이터 중 최대 120일 추출
+    # 정확히 최근 120일 치 데이터만 슬라이싱하여 평균 계산
     window = closes[: min(120, len(closes))]
     return sum(window) / len(window)
 
