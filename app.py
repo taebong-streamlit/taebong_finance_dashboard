@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 (열별 맞춤 정렬 및 고대비 색상 적용)
+- 전문 AgGrid 라이브러리 (화면 폭 자동 확장 및 고대비 색상 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,12 +23,13 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅
+# 1. 스타일 세팅 (최대 폭 제한 해제)
 # ==========================================
 st.markdown(
     """
     <style>
-        .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 1400px; }
+        /* 기존 max-width: 1400px 에서 모니터 폭의 95%를 사용하도록 확장 */
+        .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
         .dash-header {
             display:flex; justify-content:space-between; align-items:center;
             background:#fff; padding:14px 28px; border-radius:16px;
@@ -304,7 +305,7 @@ for i, key in enumerate(["dc", "pension", "irp"]):
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 
-# 헤더를 완벽하게 중앙 정렬하기 위한 커스텀 CSS 주입
+# 헤더 중앙 정렬 커스텀 CSS 주입
 custom_css = {
     ".ag-header-cell-label": {"justify-content": "center !important"},
     ".ag-header-cell": {"text-align": "center !important"}
@@ -326,30 +327,28 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 기본 셀: 텍스트는 진한 검정색(#000000), 기본 정렬은 중앙으로 설정
+        # 기본 셀 세팅
         gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         
-        # 개별 열 맞춤 정렬 및 진한 글자색 세팅
+        # 너비 확장 (width 증가)
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=280, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'})
+        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'}) # 280 -> 340으로 확장
         gb.configure_column("목표비율", width=100, editable=False)
         
-        # 우측 정렬 대상 (금액, 수량, 비율 등)
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=120, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("평가금액", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("현재비율", width=100, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("목표수량", width=120, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'}) # 130 -> 150으로 확장
+        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         
-        # 좌측 정렬 대상
-        gb.configure_column("조정필요", width=140, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
+        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'}) # 140 -> 170으로 확장
         
-        gb.configure_column("이평선(120일)", width=110, editable=False)
-        gb.configure_column("차트", cellRenderer=chart_link, width=90, editable=False)
+        gb.configure_column("이평선(120일)", width=120, editable=False)
+        gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
 
-        # AgGrid 렌더링
+        # AgGrid 렌더링 - fit_columns_on_grid_load=True 옵션을 통해 모니터 너비 꽉 채우기
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
@@ -357,6 +356,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             allow_unsafe_jscode=True, 
             theme='alpine', 
             custom_css=custom_css,
+            fit_columns_on_grid_load=True, # 화면 전체 폭 자동 맞춤
             key=f"grid_{key}"
         )
 
