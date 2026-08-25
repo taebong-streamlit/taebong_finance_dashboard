@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 스트림릿 강제 무력화 CSS: 노란색(Yellow) 탭 디자인 완벽 적용
+- 탭(Tab) 메뉴 버튼형 디자인으로 전면 개편 (노란색/파란색 고대비 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 가장 강력한 탭 디자인 강제 주입)
+# 1. 스타일 세팅 (다크 배경 + 탭 디자인 전면 개편)
 # ==========================================
 st.markdown(
     """
@@ -34,33 +34,38 @@ st.markdown(
             color: #f8fafc;
         }
         
+        /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 */
         .block-container { padding-top: 2.5rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 🔥 가장 강력한 탭(Tab) 스타일 강제 덮어쓰기 (노란색 테마) 🔥 */
-        div[data-testid="stTabs"] button[role="tab"] {
-            opacity: 1 !important;
-            background-color: #1e293b !important;
+        /* 🔥 탭(Tab) 디자인 완전히 새로 쓰기 (보호색 현상 원천 차단) 🔥 */
+        div[data-baseweb="tab-list"] {
+            gap: 10px; /* 탭 사이 간격 */
+        }
+        button[data-baseweb="tab"] {
+            opacity: 1 !important; 
+            background-color: #1e293b !important; /* 비활성 탭 배경: 남색 */
             border: 1px solid #334155 !important;
             border-bottom: none !important;
-            border-radius: 8px 8px 0 0 !important;
-            margin-right: 4px !important;
-            padding: 8px 20px !important;
+            border-radius: 12px 12px 0 0 !important;
+            padding: 10px 24px !important;
         }
-        div[data-testid="stTabs"] button[role="tab"] p {
-            color: #fde047 !important; /* 🌟 비활성 탭 글씨: 밝은 레몬/노란색 */
-            font-size: 1.15rem !important;
-            font-weight: 700 !important;
-            opacity: 1 !important;
+        button[data-baseweb="tab"] p, 
+        button[data-baseweb="tab"] span {
+            color: #fde047 !important; /* 🌟 비활성 탭 글씨: 밝은 레몬/노란색으로 확 띄게! */
+            font-size: 1.2rem !important;
+            font-weight: 700 !important; 
+            opacity: 1 !important; 
         }
         
-        /* 현재 선택된 활성 탭 (배경 노란색, 글씨 진한 남색) */
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-            background-color: #fde047 !important; /* 🌟 배경을 완전 노란색으로 */
-            border-color: #fde047 !important;
+        /* 현재 선택된 활성 탭은 배경 자체를 파란색으로! */
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #3b82f6 !important; /* 활성 탭 배경: 밝은 파란색 */
+            border-color: #3b82f6 !important;
         }
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p {
-            color: #0f172a !important; /* 글씨는 어둡게 하여 대비 극대화 */
-            font-weight: 900 !important;
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span {
+            color: #ffffff !important; /* 활성 탭 글씨: 완전 흰색 */
+            font-weight: 900 !important; 
         }
         
         /* 새로고침 버튼 글자색 강제 고정 */
@@ -69,24 +74,28 @@ st.markdown(
             border: 1px solid #475569 !important;
         }
         div[data-testid="stButton"] button p {
-            color: #ffffff !important; 
+            color: #ffffff !important; /* 버튼 텍스트 완전 흰색 */
             font-weight: 700 !important;
         }
         div[data-testid="stButton"] button:hover {
-            border-color: #fde047 !important;
+            border-color: #60a5fa !important;
         }
         div[data-testid="stButton"] button:hover p {
-            color: #fde047 !important; /* 마우스 올리면 노란색 포인트 */
+            color: #60a5fa !important; /* 마우스 올리면 파란색 포인트 */
         }
         
         /* 요약 카드 디자인 */
         .summary-card {
             background:#1e293b; padding:12px 20px; border-radius:14px;
             box-shadow:0 4px 10px rgba(0,0,0,0.2); border:1px solid #334155;
-            border-left:5px solid #fde047; /* 카드 왼쪽 포인트도 노란색으로 통일 */
+            border-left:5px solid #3b82f6;
         }
         .summary-card label { font-size:1.1rem; color:#94a3b8; font-weight:700; }
         .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#f8fafc; }
+        
+        .card-dc { border-left-color:#3b82f6; } 
+        .card-pension { border-left-color:#10b981; } 
+        .card-irp { border-left-color:#8b5cf6; } 
         
         .status-badge {
             font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600;
@@ -139,6 +148,7 @@ BASE_PORTFOLIO = {
 }
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
+ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
 CATEGORY_COLORS = {
     "주식": "#60a5fa", 
     "채권": "#fb923c", 
@@ -356,7 +366,7 @@ with summary_cols[0]:
     st.markdown(f'<div class="summary-card"><label>총 연금 자산 평가액</label><div class="value">{grand_total:,.0f} 원</div></div>', unsafe_allow_html=True)
 for i, key in enumerate(["dc", "pension", "irp"]):
     with summary_cols[i + 1]:
-        st.markdown(f'<div class="summary-card"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
 
@@ -439,7 +449,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         with info_col:
             rule_html = """
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
-                <h4 style="margin-top: 0; color: #fde047; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+                <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
                 <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
