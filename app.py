@@ -1,6 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 네이버 금융 실시간 시세 + 120일 이동평균선 실계산 (BeautifulSoup 안정성 강화 버전)
+- 네이버 금융 실시간 시세 연동
+- 이평선(120일) 수동 선택(상단/하단 드롭다운) 및 색상 시각화 적용
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml html5lib streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -88,37 +89,37 @@ st.markdown(
 # ==========================================
 DEFAULT_PORTFOLIO = {
     "dc": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 5440},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 4094},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 3300},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 2131},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 14611},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 1235},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 11241},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 5440, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 4094, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 3300, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 2131, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 14611, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 1235, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 11241, "이평선": "-"},
     ],
     "pension": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 2174},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 1596},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 1320},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 834},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 5770},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 505},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 5511},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 2174, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 1596, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 1320, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 834, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 5770, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 505, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 5511, "이평선": "-"},
     ],
     "irp": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 925},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 693},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 565},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 375},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 2499},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 212},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 7325},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 925, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 693, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 565, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 375, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 2499, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 212, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 7325, "이평선": "-"},
     ],
 }
 
@@ -132,6 +133,8 @@ def load_portfolio_from_file():
                     df = pd.DataFrame(items)
                     if "현재가" not in df.columns:
                         df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
+                    if "이평선" not in df.columns:
+                        df["이평선"] = df["ETF명"].apply(lambda name: "-" if "머니마켓" in name or name == "원화 현금" else "하단")
                     portfolio[key] = df
                 return portfolio
         except Exception:
@@ -149,7 +152,7 @@ def save_portfolio_to_file(portfolio_dict):
     try:
         data_to_save = {}
         for key, df in portfolio_dict.items():
-            sub_df = df[["구분", "ETF명", "코드", "목표비율", "보유수량"]].copy()
+            sub_df = df[["구분", "ETF명", "코드", "목표비율", "보유수량", "이평선"]].copy()
             data_to_save[key] = sub_df.to_dict(orient="records")
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
@@ -176,7 +179,7 @@ if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
 # ==========================================
-# 4. 실시간 시세 & 120일 이동평균 스크래핑 (안정화 버전)
+# 4. 실시간 시세 스크래핑
 # ==========================================
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_current_price(code: str):
@@ -191,41 +194,6 @@ def fetch_current_price(code: str):
     except Exception:
         pass
     return None
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_ma120(code: str):
-    if not code: return None
-    closes = []
-    try:
-        # 네이버 금융 일별 시세 페이지를 페이지별로 탐색하여 종가 추출 (최대 13페이지 = 약 130거래일)
-        for page in range(1, 14):
-            url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page={page}"
-            res = requests.get(url, headers=HEADERS, timeout=3)
-            soup = BeautifulSoup(res.text, "html.parser")
-            rows = soup.select("table.type2 tr")
-            got_data = False
-            for row in rows:
-                tds = row.find_all("td")
-                if len(tds) >= 2:
-                    price_span = tds[1].find("span")
-                    date_td = tds[0].find("span")
-                    if price_span and date_td and date_td.text.strip():
-                        try:
-                            val = int(price_span.text.strip().replace(",", ""))
-                            closes.append(val)
-                            got_data = True
-                        except ValueError:
-                            continue
-            if not got_data and page > 2:
-                break
-            time.sleep(0.02)
-    except Exception:
-        pass
-    
-    if len(closes) < 20: return None
-    # 정확히 최근 120일 치 데이터만 슬라이싱하여 평균 계산
-    window = closes[: min(120, len(closes))]
-    return sum(window) / len(window)
 
 def fetch_all_prices(codes: list[str]):
     prices, success = {}, 0
@@ -280,6 +248,19 @@ function(params) {
 }
 """)
 
+# 이평선(상단: 빨간 계열, 하단: 파란 계열) 셀 색상 지정 자바스크립트
+ma_color_jscode = JsCode("""
+function(params) {
+    var val = params.value;
+    if (val === '상단') {
+        return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center', 'backgroundColor': '#fee2e2'};
+    } else if (val === '하단') {
+        return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center', 'backgroundColor': '#dbeafe'};
+    }
+    return {'textAlign': 'center', 'color': '#64748b'};
+}
+""")
+
 chart_link = JsCode("""
 class ChartLinkRenderer {
     init(params) {
@@ -310,7 +291,6 @@ do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="conte
 
 if do_refresh:
     fetch_current_price.clear()
-    fetch_ma120.clear()
     st.session_state.fetch_status["done"] = False
 
 if not st.session_state.fetch_status["done"] or do_refresh:
@@ -352,15 +332,8 @@ for key, df in st.session_state.portfolio.items():
         if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f}주 매수"
         if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f}주 매도"
         return "유지"
-    
-    def ma_tag(r):
-        if not r["코드"] or r["ETF명"] == "KODEX 미국머니마켓액티브": return "-"
-        ma = fetch_ma120(r["코드"])
-        if ma is None or not r["현재가"]: return "미확인"
-        return "🔥 상단" if r["현재가"] >= ma else "🧊 하단"
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
-    df_calc["이평선(120일)"] = df_calc.apply(ma_tag, axis=1)
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
@@ -386,7 +359,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
         
-        display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
+        display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
         
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
@@ -405,11 +378,19 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        
+        # 이평선 컬럼: 코드가 있는 항목은 드롭다운(셀렉트박스)으로 '상단', '하단' 선택 가능하게 설정
+        gb.configure_column(
+            "이평선", 
+            editable=True, 
+            cellEditor="agSelectCellEditor", 
+            cellEditorParams={"values": ["상단", "하단"]}, 
+            cellStyle=ma_color_jscode, 
+            width=120
+        )
+        
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
-        
-        gb.configure_column("이평선(120일)", width=120, editable=False, cellStyle={'textAlign': 'center', 'color': '#000000'})
         gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
@@ -443,13 +424,16 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
                 new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
                 new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
+                new_mas = edited_df["이평선"].values
                 
                 orig_prices = st.session_state.portfolio[key]["현재가"].values
                 orig_amounts = st.session_state.portfolio[key]["보유수량"].values
+                orig_mas = st.session_state.portfolio[key]["이평선"].values
                 
-                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all():
+                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
+                    st.session_state.portfolio[key]["이평선"] = new_mas
                     save_portfolio_to_file(st.session_state.portfolio)
                     st.rerun()
 
@@ -467,8 +451,8 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
                 <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#ef4444;">상단</span></b> : 해당 ETF 보유</li>
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#60a5fa;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
                 </ul>
             </div>
             """
