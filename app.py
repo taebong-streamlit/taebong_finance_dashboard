@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 제목 윗단 짤림 현상 방지(상단 여백 추가) 및 비활성 탭 텍스트 화이트(#ffffff) 고정
+- 탭 메뉴 텍스트 투명도 강제 해제 및 완벽한 가독성 확보
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -34,18 +34,25 @@ st.markdown(
             color: #f8fafc;
         }
         
-        /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 (0.8rem -> 2.5rem) */
+        /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 */
         .block-container { padding-top: 2.5rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 탭(Tab) 글자색 강제 고정 (선택되지 않은 탭도 완전한 하얀색으로 보이게) */
-        button[data-baseweb="tab"] p {
-            color: #ffffff !important; /* 평상시 완전 흰색 */
-            font-size: 1.15rem !important;
-            font-weight: 500 !important; /* 굵기 기본 */
+        /* 🔥 탭(Tab) 글자색 및 투명도 완벽 고정 (스트림릿의 강제 회색화 무력화) 🔥 */
+        button[data-baseweb="tab"] {
+            opacity: 1 !important; /* 선택 안 된 탭의 투명도를 강제로 100%로 끌어올림 */
         }
-        button[data-baseweb="tab"][aria-selected="true"] p {
-            color: #ffffff !important; /* 선택된 탭 흰색 */
-            font-weight: 900 !important; /* 선택된 탭은 확실히 더 굵게 표시 */
+        button[data-baseweb="tab"] p, 
+        button[data-baseweb="tab"] span {
+            color: #ffffff !important; /* 평상시 무조건 완전한 흰색 */
+            font-size: 1.2rem !important;
+            font-weight: 600 !important; 
+            opacity: 1 !important; 
+        }
+        /* 현재 선택된 탭은 눈에 확 띄는 파란색으로 강조! */
+        button[data-baseweb="tab"][aria-selected="true"] p,
+        button[data-baseweb="tab"][aria-selected="true"] span {
+            color: #60a5fa !important; /* 네온 블루 */
+            font-weight: 900 !important; 
         }
         
         /* 새로고침 버튼 글자색 강제 고정 */
@@ -54,8 +61,8 @@ st.markdown(
             border: 1px solid #475569 !important;
         }
         div[data-testid="stButton"] button p {
-            color: #f8fafc !important; /* 버튼 텍스트 흰색 */
-            font-weight: 600 !important;
+            color: #ffffff !important; /* 버튼 텍스트 완전 흰색 */
+            font-weight: 700 !important;
         }
         div[data-testid="stButton"] button:hover {
             border-color: #60a5fa !important;
@@ -279,8 +286,7 @@ amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleStri
 # ==========================================
 header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
-    # margin-top과 line-height 조정을 통해 윗부분 잘림 완벽 방지
-    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#f8fafc; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
 do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
 
@@ -424,18 +430,18 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         chart_col, info_col = st.columns([1, 1.3]) 
         
         with chart_col:
-            st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='text-align: center; color: #ffffff;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
             render_donut(cat_totals, key)
             
         with info_col:
             rule_html = """
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
-                <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+                <h4 style="margin-top: 0; color: #ffffff; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
                 <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
                     <li><b>일봉차트 120일 이동평균선 <span style="color:#ef4444;">상단</span></b> : 해당 ETF 보유</li>
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#60a5fa;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#f8fafc; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#60a5fa;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
                 </ul>
             </div>
             """
