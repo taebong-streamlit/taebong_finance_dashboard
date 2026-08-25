@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 스트림릿 1.35.0 버전 호환: 탭 글자 1.5배 확대 및 색상 강제 고정
+- 탭 메뉴 1.5배 확대 및 비활성 탭 글자색 '밝은 노란색(#fde047)' 강제 고정
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,12 +23,12 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 탭 텍스트 절대 고정)
+# 1. 스타일 세팅 (탭 가독성 완벽 해결)
 # ==========================================
 st.markdown(
     """
     <style>
-        /* 전체 배경을 어두운 네이비톤으로 유지 */
+        /* 전체 배경 어두운 네이비톤 */
         .stApp {
             background-color: #0f172a;
             color: #f8fafc;
@@ -41,29 +41,26 @@ st.markdown(
             max-width: 95%; 
         }
         
-        /* 🔥 탭(Tab) 폰트 1.5배 확대 및 색상 완벽 강제 고정 🔥 */
+        /* 🔥 탭(Tab) 글자 크기 1.5배 확대 및 색상 강제 지정 🔥 */
         
-        button[data-baseweb="tab"] {
-            opacity: 1 !important; 
+        /* 1. 비활성 탭 (연금저축, IRP 등) - 밝은 노란색(#fde047)으로 확실하게 보이게 고정 */
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] {
+            opacity: 1 !important;
         }
-        
-        /* 비활성 탭 (연금저축, IRP) - 선명한 흰색 & 1.5배 확대 */
-        button[data-baseweb="tab"][aria-selected="false"] p,
-        button[data-baseweb="tab"][aria-selected="false"] span,
-        button[data-baseweb="tab"][aria-selected="false"] div {
-            font-size: 1.5rem !important;
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] *,
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="false"] p {
+            font-size: 24px !important; /* 1.5배 확대 */
             font-weight: 800 !important; 
-            color: #ffffff !important; 
+            color: #fde047 !important; /* 눈에 확 띄는 밝은 노란색 */
             opacity: 1 !important;
         }
 
-        /* 활성 탭 (DC형 퇴직연금) - 밑줄과 깔맞춤인 빨간색 & 1.5배 확대 */
-        button[data-baseweb="tab"][aria-selected="true"] p,
-        button[data-baseweb="tab"][aria-selected="true"] span,
-        button[data-baseweb="tab"][aria-selected="true"] div {
-            font-size: 1.5rem !important;
+        /* 2. 활성 탭 (현재 선택된 탭 - DC형 퇴직연금) - 빨간색 밑줄에 어울리는 선명한 빨간색 */
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] *,
+        .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] p {
+            font-size: 24px !important; /* 1.5배 확대 */
             font-weight: 900 !important; 
-            color: #ff4b4b !important; 
+            color: #ff4b4b !important; /* 선명한 빨간색 */
         }
         
         /* 새로고침 버튼 디자인 */
