@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리를 이용한 '완벽한 중앙 정렬' 및 엑셀 UI 적용
+- 전문 AgGrid 라이브러리 (데이터 및 헤더 완벽 중앙 정렬 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (AgGrid 헤더 중앙 정렬 CSS 포함)
+# 1. 스타일 세팅
 # ==========================================
 st.markdown(
     """
@@ -52,11 +52,6 @@ st.markdown(
         .card-dc { border-left-color:#2563eb; }
         .card-pension { border-left-color:#10b981; }
         .card-irp { border-left-color:#8b5cf6; }
-        
-        /* AgGrid 테이블 열 제목(헤더) 완벽 중앙 정렬 강제 지정 */
-        .ag-header-cell-label {
-            justify-content: center !important;
-        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -202,7 +197,6 @@ def render_donut(cat_totals: dict, key: str):
                       showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15))
     st.plotly_chart(fig, width="stretch", key=f"chart_{key}")
 
-# 구분(분류) 열 색상 및 중앙 정렬 지정 JS 코드
 color_jscode = JsCode("""
 function(params) {
     var val = params.value;
@@ -215,7 +209,6 @@ function(params) {
 }
 """)
 
-# 네이버 차트 링크 생성 JS 코드
 chart_link = JsCode("""
 function(params) {
     if (params.value && params.value !== '') {
@@ -225,7 +218,6 @@ function(params) {
 }
 """)
 
-# 입력창에 콤마(,)와 단위 표시하는 포맷터 JS 코드
 currency_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 원'; }")
 amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 주'; }")
 
@@ -304,7 +296,14 @@ for i, key in enumerate(["dc", "pension", "irp"]):
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
-# 탭별 AgGrid 렌더링
+
+# 헤더를 완벽하게 중앙 정렬하기 위한 커스텀 CSS 주입 선언
+custom_css = {
+    ".ag-header-cell-label": {"justify-content": "center !important"},
+    ".ag-header-cell": {"text-align": "center !important"}
+}
+
+
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
@@ -313,24 +312,20 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '네이버차트']].copy()
         
-        # 편집을 제외한 나머지 열 텍스트 예쁘게 포맷팅
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
         display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
         display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
 
-        # AgGrid 옵션 빌더 생성
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 1. 모든 열의 기본값을 "중앙 정렬"로 완벽하게 덮어쓰기!
-        gb.configure_default_column(cellStyle={'textAlign': 'center'}, headerClass='ag-center-header')
+        # 모든 데이터 셀 중앙 정렬
+        gb.configure_default_column(cellStyle={'textAlign': 'center'})
         
-        # 2. 열별 맞춤 세팅 (색상 및 너비 조절)
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
         gb.configure_column("ETF명", width=280, editable=False)
         gb.configure_column("목표비율", width=100, editable=False)
         
-        # 편집 가능한 현재가/보유수량에 입력 필드 세팅 (수정 시 숫자만, 볼 때는 콤마 붙여서)
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120)
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=120)
         
@@ -343,17 +338,17 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gridOptions = gb.build()
 
-        # AgGrid 웹 화면 렌더링
+        # AgGrid 렌더링 및 커스텀 CSS 적용
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
-            update_mode=GridUpdateMode.VALUE_CHANGED, # 값이 수정될 때만 업데이트
-            allow_unsafe_jscode=True, # 색상 및 차트 링크 JS 작동 허용
-            theme='alpine', # 가장 모던하고 깔끔한 테마
+            update_mode=GridUpdateMode.VALUE_CHANGED, 
+            allow_unsafe_jscode=True, 
+            theme='alpine', 
+            custom_css=custom_css, # 바로 이 부분이 헤더 중앙 정렬을 강제합니다
             key=f"grid_{key}"
         )
 
-        # 사용자 입력(수정) 감지 및 세션 갱신 로직
         edited_data = grid_response['data']
         if edited_data is not None:
             if isinstance(edited_data, dict):
@@ -368,7 +363,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 orig_prices = st.session_state.portfolio[key]["현재가"].values
                 orig_amounts = st.session_state.portfolio[key]["보유수량"].values
                 
-                # 값이 실제로 변경되었다면 화면 전체 새로고침
                 if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all():
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
