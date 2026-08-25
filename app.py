@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 (데이터 및 헤더 완벽 중앙 정렬, 차트 링크 렌더링 수정)
+- 전문 AgGrid 라이브러리 (데이터/헤더 중앙정렬 및 ETF명만 왼쪽 정렬)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -209,7 +209,6 @@ function(params) {
 }
 """)
 
-# (수정) AgGrid에서 차트 링크가 텍스트가 아닌 실제 클릭 가능한 링크로 나타나도록 클래스형 렌더러로 강력하게 제어
 chart_link = JsCode("""
 class ChartLinkRenderer {
     init(params) {
@@ -291,8 +290,6 @@ for key, df in st.session_state.portfolio.items():
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
     df_calc["이평선(120일)"] = df_calc.apply(ma_tag, axis=1)
-    
-    # (수정) "네이버차트" 대신 "차트"로 열 이름 변경
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
@@ -320,7 +317,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         df_calc, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
         
-        # (수정) "차트" 열 적용
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
         
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
@@ -333,8 +329,9 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         # 모든 데이터 셀 중앙 정렬
         gb.configure_default_column(cellStyle={'textAlign': 'center'})
         
+        # 각 열 설정 (ETF명 열에만 cellStyle로 왼쪽 정렬 강제 주입)
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=280, editable=False)
+        gb.configure_column("ETF명", width=280, editable=False, cellStyle={'textAlign': 'left'})
         gb.configure_column("목표비율", width=100, editable=False)
         
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120)
@@ -346,7 +343,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("목표수량", width=120, editable=False)
         gb.configure_column("조정필요", width=140, editable=False)
         
-        # (수정) 변경된 렌더러 적용 (차트)
         gb.configure_column("차트", cellRenderer=chart_link, width=90, editable=False)
 
         gridOptions = gb.build()
