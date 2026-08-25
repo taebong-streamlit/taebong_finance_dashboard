@@ -1,8 +1,8 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 텍스트 기반 비율 표시 및 강제 중앙 정렬 적용
-필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml
+- 전문 AgGrid 라이브러리를 이용한 '완벽한 중앙 정렬' 및 엑셀 UI 적용
+필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
 
@@ -12,6 +12,8 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from bs4 import BeautifulSoup
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid.shared import JsCode
 
 # ==========================================
 # 0. 페이지 기본 설정
@@ -21,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅
+# 1. 스타일 세팅 (AgGrid 헤더 중앙 정렬 CSS 포함)
 # ==========================================
 st.markdown(
     """
@@ -50,7 +52,11 @@ st.markdown(
         .card-dc { border-left-color:#2563eb; }
         .card-pension { border-left-color:#10b981; }
         .card-irp { border-left-color:#8b5cf6; }
-        .source-info { margin-top:8px; text-align:center; font-size:0.8rem; color:#94a3b8; }
+        
+        /* AgGrid 테이블 열 제목(헤더) 완벽 중앙 정렬 강제 지정 */
+        .ag-header-cell-label {
+            justify-content: center !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -181,7 +187,7 @@ def get_unique_codes():
     return sorted(codes)
 
 # ==========================================
-# 5. 차트 렌더링 함수
+# 5. 차트 렌더링 함수 & AgGrid 자바스크립트 코드
 # ==========================================
 def render_donut(cat_totals: dict, key: str):
     labels = [k for k, v in cat_totals.items() if v > 0]
@@ -195,6 +201,33 @@ def render_donut(cat_totals: dict, key: str):
     fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=300,
                       showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15))
     st.plotly_chart(fig, width="stretch", key=f"chart_{key}")
+
+# 구분(분류) 열 색상 및 중앙 정렬 지정 JS 코드
+color_jscode = JsCode("""
+function(params) {
+    var val = params.value;
+    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '채권') { return {'color': '#f59e0b', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '실물') { return {'color': '#eab308', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '리츠') { return {'color': '#10b981', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '현금') { return {'color': '#94a3b8', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    return {'textAlign': 'center'};
+}
+""")
+
+# 네이버 차트 링크 생성 JS 코드
+chart_link = JsCode("""
+function(params) {
+    if (params.value && params.value !== '') {
+        return '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
+    }
+    return '-';
+}
+""")
+
+# 입력창에 콤마(,)와 단위 표시하는 포맷터 JS 코드
+currency_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 원'; }")
+amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 주'; }")
 
 # ==========================================
 # 6. 헤더 및 시세 호출
@@ -233,7 +266,6 @@ st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_
 grand_total = 0
 computed = {}
 
-# 전체 평가액 사전 계산
 for key, df in st.session_state.portfolio.items():
     df_calc = df.copy()
     df_calc["평가금액"] = df_calc["현재가"] * df_calc["보유수량"]
@@ -264,71 +296,83 @@ for key, df in st.session_state.portfolio.items():
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
     computed[key] = (df_calc, total_eval, cat_totals)
 
-# 요약 카드 출력
 summary_cols = st.columns(4)
 with summary_cols[0]:
     st.markdown(f'<div class="summary-card"><label>총 연금 자산 평가액</label><div class="value">{grand_total:,.0f} 원</div></div>', unsafe_allow_html=True)
 for i, key in enumerate(["dc", "pension", "irp"]):
     with summary_cols[i + 1]:
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
-
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
-# 스타일링 함수: 분류 텍스트 색상 및 강제 중앙 정렬 동시 적용
-def style_category(s):
-    return [f"color: {CATEGORY_COLORS.get(v, '#000')}; font-weight: bold; text-align: center;" for v in s]
-
-# 탭별 표 + 도넛 차트 렌더링
+# 탭별 AgGrid 렌더링
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
         st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
         
-        # 통합 표를 위한 데이터프레임 가공 (비율 포맷팅 변경: 텍스트 형태)
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '네이버차트']].copy()
         
+        # 편집을 제외한 나머지 열 텍스트 예쁘게 포맷팅
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
+        display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
+        display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
 
-        # Pandas Styler를 적용하여 데이터프레임 서식 지정
-        styled_df = display_df.style\
-            .apply(style_category, subset=["구분"])\
-            .set_properties(subset=["목표비율", "현재비율", "이평선(120일)", "네이버차트"], **{"text-align": "center"})\
-            .set_properties(subset=["ETF명"], **{"text-align": "left"})\
-            .set_table_styles([
-                {"selector": "th", "props": [("text-align", "center"), ("font-weight", "bold"), ("color", "black"), ("font-size", "14px")]}
-            ])
+        # AgGrid 옵션 빌더 생성
+        gb = GridOptionsBuilder.from_dataframe(display_df)
+        
+        # 1. 모든 열의 기본값을 "중앙 정렬"로 완벽하게 덮어쓰기!
+        gb.configure_default_column(cellStyle={'textAlign': 'center'}, headerClass='ag-center-header')
+        
+        # 2. 열별 맞춤 세팅 (색상 및 너비 조절)
+        gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
+        gb.configure_column("ETF명", width=280, editable=False)
+        gb.configure_column("목표비율", width=100, editable=False)
+        
+        # 편집 가능한 현재가/보유수량에 입력 필드 세팅 (수정 시 숫자만, 볼 때는 콤마 붙여서)
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=120)
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=120)
+        
+        gb.configure_column("평가금액", width=130, editable=False)
+        gb.configure_column("현재비율", width=100, editable=False)
+        gb.configure_column("이평선(120일)", width=110, editable=False)
+        gb.configure_column("목표수량", width=120, editable=False)
+        gb.configure_column("조정필요", width=140, editable=False)
+        gb.configure_column("네이버차트", cellRenderer=chart_link, width=100, editable=False)
 
-        # Streamlit Data Editor
-        edited_df = st.data_editor(
-            styled_df,
-            use_container_width=True,
-            hide_index=True,
-            key=f"editor_{key}",
-            column_config={
-                "구분": st.column_config.TextColumn("분류", disabled=True, width="small"),
-                "ETF명": st.column_config.TextColumn("ETF명", disabled=True, width="medium"),
-                "목표비율": st.column_config.TextColumn("목표비율", disabled=True, width="small"),
-                "현재가": st.column_config.NumberColumn("현재가 ✏️", min_value=0, step=1, format="%,d 원", disabled=False),
-                "보유수량": st.column_config.NumberColumn("보유수량 ✏️", min_value=0, step=1, format="%,d 주", disabled=False),
-                "평가금액": st.column_config.NumberColumn("평가금액", format="%,d 원", disabled=True),
-                "현재비율": st.column_config.TextColumn("현재비율", disabled=True, width="small"),
-                "이평선(120일)": st.column_config.TextColumn("120일선", disabled=True, width="small"),
-                "목표수량": st.column_config.NumberColumn("목표수량", format="%,d 주", disabled=True),
-                "조정필요": st.column_config.TextColumn("리밸런싱", disabled=True),
-                "네이버차트": st.column_config.LinkColumn("차트", display_text="📊 열기", disabled=True)
-            }
+        gridOptions = gb.build()
+
+        # AgGrid 웹 화면 렌더링
+        grid_response = AgGrid(
+            display_df,
+            gridOptions=gridOptions,
+            update_mode=GridUpdateMode.VALUE_CHANGED, # 값이 수정될 때만 업데이트
+            allow_unsafe_jscode=True, # 색상 및 차트 링크 JS 작동 허용
+            theme='alpine', # 가장 모던하고 깔끔한 테마
+            key=f"grid_{key}"
         )
 
-        # 사용자 입력에 의한 현재가/보유수량 변경 감지 및 세션 갱신
-        if not edited_df["현재가"].equals(display_df["현재가"]) or not edited_df["보유수량"].equals(display_df["보유수량"]):
-            st.session_state.portfolio[key]["현재가"] = edited_df["현재가"].values
-            st.session_state.portfolio[key]["보유수량"] = edited_df["보유수량"].values
-            st.rerun()
+        # 사용자 입력(수정) 감지 및 세션 갱신 로직
+        edited_data = grid_response['data']
+        if edited_data is not None:
+            if isinstance(edited_data, dict):
+                edited_df = pd.DataFrame(edited_data)
+            else:
+                edited_df = edited_data
+                
+            if not edited_df.empty:
+                new_prices = pd.to_numeric(edited_df["현재가"], errors='coerce').fillna(0).astype(int).values
+                new_amounts = pd.to_numeric(edited_df["보유수량"], errors='coerce').fillna(0).astype(int).values
+                
+                orig_prices = st.session_state.portfolio[key]["현재가"].values
+                orig_amounts = st.session_state.portfolio[key]["보유수량"].values
+                
+                # 값이 실제로 변경되었다면 화면 전체 새로고침
+                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all():
+                    st.session_state.portfolio[key]["현재가"] = new_prices
+                    st.session_state.portfolio[key]["보유수량"] = new_amounts
+                    st.rerun()
 
-        # 도넛 차트
         st.markdown(f"**{ACCOUNT_LABELS[key]} 자산 비중**")
         render_donut(cat_totals, key)
-
-st.markdown('<div class="source-info">시세 데이터: 네이버 금융 | 기반 기능: 통합 UI 데이터 에디터</div>', unsafe_allow_html=True)
