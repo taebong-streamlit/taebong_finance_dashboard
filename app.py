@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 보유수량 변경 시 JSON 파일 자동 저장 기능(영속성) 추가
+- 보유수량 수정 시 평가금액, 현재비율, 목표수량, 조정필요 자동 실시간 연산 적용
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -26,7 +26,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 DATA_FILE = "portfolio_data.json"
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 탭 디자인 강제 제어)
+# 1. 스타일 세팅
 # ==========================================
 st.markdown(
     """
@@ -42,30 +42,6 @@ st.markdown(
             padding-top: 3.5rem !important; 
             padding-bottom: 1rem; 
             max-width: 95%; 
-        }
-        
-        /* 탭(Tab) 폰트 1.5배 확대 및 색상 강제 지정 */
-        button[data-baseweb="tab"] {
-            opacity: 1 !important; 
-        }
-        
-        /* 비활성 탭 (연금저축, IRP) */
-        button[data-baseweb="tab"][aria-selected="false"] p,
-        button[data-baseweb="tab"][aria-selected="false"] span,
-        button[data-baseweb="tab"][aria-selected="false"] div {
-            font-size: 1.5rem !important;
-            font-weight: 800 !important; 
-            color: #ffffff !important; 
-            opacity: 1 !important;
-        }
-
-        /* 활성 탭 (DC형 퇴직연금) */
-        button[data-baseweb="tab"][aria-selected="true"] p,
-        button[data-baseweb="tab"][aria-selected="true"] span,
-        button[data-baseweb="tab"][aria-selected="true"] div {
-            font-size: 1.5rem !important;
-            font-weight: 900 !important; 
-            color: #ff4b4b !important; 
         }
         
         /* 새로고침 버튼 디자인 */
@@ -162,7 +138,6 @@ def load_portfolio_from_file():
         except Exception:
             pass
     
-    # 파일이 없거나 오류 발생 시 기본값으로 세팅 후 저장
     portfolio = {}
     for key, items in DEFAULT_PORTFOLIO.items():
         df = pd.DataFrame(items)
@@ -175,7 +150,6 @@ def save_portfolio_to_file(portfolio_dict):
     try:
         data_to_save = {}
         for key, df in portfolio_dict.items():
-            # 필요한 컬럼만 추출하여 dict 형태로 변환
             sub_df = df[["구분", "ETF명", "코드", "목표비율", "보유수량"]].copy()
             data_to_save[key] = sub_df.to_dict(orient="records")
         with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -194,7 +168,7 @@ CATEGORY_COLORS = {
 }
 
 # ==========================================
-# 3. 세션 상태 초기화 (파일 연동)
+# 3. 세션 상태 초기화
 # ==========================================
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = load_portfolio_from_file()
@@ -412,6 +386,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
         
+        # 화면에 보여줄 데이터 프레임 구성 (현재가, 보유수량만 편집 가능)
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
         
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
@@ -429,10 +404,11 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        
+        # 그 외 항목은 자동 계산되므로 수정 불가 설정
         gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
         gb.configure_column("이평선(120일)", width=120, editable=False, cellStyle={'textAlign': 'center', 'color': '#000000'})
@@ -459,8 +435,17 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 edited_df = edited_data
                 
             if not edited_df.empty:
-                new_prices = pd.to_numeric(edited_df["현재가"], errors='coerce').fillna(0).astype(int).values
-                new_amounts = pd.to_numeric(edited_df["보유수량"], errors='coerce').fillna(0).astype(int).values
+                # 콤마, 원, 주 등의 문자를 제거하고 숫자로 깨끗하게 변환
+                def clean_numeric(val):
+                    if pd.isna(val): return 0
+                    s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
+                    try:
+                        return float(s)
+                    except ValueError:
+                        return 0
+
+                new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
+                new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
                 
                 orig_prices = st.session_state.portfolio[key]["현재가"].values
                 orig_amounts = st.session_state.portfolio[key]["보유수량"].values
@@ -469,7 +454,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
                     
-                    # 🔥 보유수량 등이 변경되면 즉시 JSON 파일로 자동 저장 🔥
+                    # 변경 즉시 JSON 파일에 저장하고 화면 새로고침하여 전체 지표(평가금액, 현재비율, 목표수량 등) 자동 갱신
                     save_portfolio_to_file(st.session_state.portfolio)
                     st.rerun()
 
