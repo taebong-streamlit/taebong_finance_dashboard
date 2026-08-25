@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 (화면 폭 자동 확장 및 고대비 색상 적용)
+- 전문 AgGrid 라이브러리 / 2단 레이아웃 (차트 좌측 이동 및 우측 가이드 삽입)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,12 +23,11 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (최대 폭 제한 해제)
+# 1. 스타일 세팅
 # ==========================================
 st.markdown(
     """
     <style>
-        /* 기존 max-width: 1400px 에서 모니터 폭의 95%를 사용하도록 확장 */
         .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
         .dash-header {
             display:flex; justify-content:space-between; align-items:center;
@@ -190,13 +189,23 @@ def render_donut(cat_totals: dict, key: str):
     values = [v for v in cat_totals.values() if v > 0]
     colors = [CATEGORY_COLORS.get(l, "#cbd5e1") for l in labels]
     fig = go.Figure(
-        data=[go.Pie(labels=labels, values=values, hole=0.55,
-                     marker=dict(colors=colors, line=dict(color="#fff", width=2)),
-                     textinfo="label+percent")]
+        data=[go.Pie(
+            labels=labels, 
+            values=values, 
+            hole=0.55,
+            marker=dict(colors=colors, line=dict(color="#fff", width=2)),
+            # 텍스트 라벨을 HTML <b> 태그를 이용해 강제로 굵게 처리
+            texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
+            textfont=dict(size=14, color="#000000") # 진한 검정색 및 폰트 크기 확대
+        )]
     )
-    fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=300,
-                      showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15))
-    st.plotly_chart(fig, width="stretch", key=f"chart_{key}")
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=0, r=0), # 좌우 여백을 최소화하여 좌측 정렬 효과 극대화
+        height=320,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15)
+    )
+    st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
 color_jscode = JsCode("""
 function(params) {
@@ -316,7 +325,6 @@ tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
-        st.markdown(f"### {ACCOUNT_LABELS[key]} 포트폴리오")
         
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
         
@@ -327,28 +335,25 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 기본 셀 세팅
         gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         
-        # 너비 확장 (width 증가)
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'}) # 280 -> 340으로 확장
+        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'})
         gb.configure_column("목표비율", width=100, editable=False)
         
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'}) # 130 -> 150으로 확장
+        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         
-        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'}) # 140 -> 170으로 확장
+        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
         gb.configure_column("이평선(120일)", width=120, editable=False)
         gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
 
-        # AgGrid 렌더링 - fit_columns_on_grid_load=True 옵션을 통해 모니터 너비 꽉 채우기
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
@@ -356,7 +361,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             allow_unsafe_jscode=True, 
             theme='alpine', 
             custom_css=custom_css,
-            fit_columns_on_grid_load=True, # 화면 전체 폭 자동 맞춤
+            fit_columns_on_grid_load=True, 
             key=f"grid_{key}"
         )
 
@@ -379,5 +384,28 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
                     st.rerun()
 
-        st.markdown(f"**{ACCOUNT_LABELS[key]} 자산 비중**")
-        render_donut(cat_totals, key)
+        # =======================================================
+        # 하단 2단 분할 레이아웃: 왼쪽(차트) / 오른쪽(가이드)
+        # =======================================================
+        st.write("") # 약간의 여백 추가
+        chart_col, info_col = st.columns([1, 1.3]) # 1대 1.3 비율로 우측 공간을 좀 더 넉넉하게 배분
+        
+        with chart_col:
+            # 차트 위에 제목 표시 (중앙 정렬)
+            st.markdown(f"<h4 style='text-align: center; color: #0f172a;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
+            render_donut(cat_totals, key)
+            
+        with info_col:
+            # 우측 여백에 들어갈 깔끔한 안내 카드 디자인
+            rule_html = """
+            <div style="background-color: #f8fafc; padding: 25px 30px; border-radius: 12px; border: 1px solid #cbd5e1; height: 95%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="margin-top: 0; color: #0f172a; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+                <p style="font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#2563eb;">매월 1일</span></p>
+                <p style="font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
+                <ul style="font-size: 1.05rem; font-weight: 600; color: #334155; line-height: 1.8; margin-top: 0; padding-left: 25px;">
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <br>&nbsp;&nbsp;&nbsp;&nbsp;👉 <span style="color:#0f172a; font-weight:800; background-color:#e2e8f0; padding:2px 8px; border-radius:6px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+                </ul>
+            </div>
+            """
+            st.markdown(rule_html, unsafe_allow_html=True)
