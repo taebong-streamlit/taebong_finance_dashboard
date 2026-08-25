@@ -1,7 +1,6 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- KODEX 미국머니마켓액티브 이평선 '-' 처리 적용
+- 네이버 금융 실시간 시세 + 120일 이동평균선 실계산 (판정 로직 정밀 개선)
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -177,7 +176,7 @@ if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
 # ==========================================
-# 4. 실시간 시세 & 120일 이동평균 스크래핑
+# 4. 실시간 시세 & 120일 이동평균 스크래핑 (판정 로직 개선)
 # ==========================================
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_current_price(code: str):
@@ -198,32 +197,22 @@ def fetch_ma120(code: str):
     if not code: return None
     closes = []
     try:
-        with requests.Session() as s:
-            s.headers.update(HEADERS)
-            page = 1
-            while len(closes) < 125 and page <= 14:
-                url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page={page}"
-                res = s.get(url, timeout=3)
-                soup = BeautifulSoup(res.text, "html.parser")
-                rows = soup.select("table.type2 tr")
-                got_row = False
-                for row in rows:
-                    tds = row.find_all("td")
-                    if len(tds) >= 2:
-                        date_span = tds[0].find("span")
-                        price_span = tds[1].find("span")
-                        if date_span and price_span and date_span.text.strip():
-                            try:
-                                closes.append(int(price_span.text.strip().replace(",", "")))
-                                got_row = True
-                            except ValueError:
-                                continue
-                if not got_row: break
-                page += 1
-                time.sleep(0.05)
+        # 네이버 금융 일별 시세 테이블을 안전하게 읽어오기 위해 6페이지(약 60거래일~120거래일) 순회
+        for page in range(1, 7):
+            url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page={page}"
+            res = requests.get(url, headers=HEADERS, timeout=3)
+            dfs = pd.read_html(res.text, header=0)
+            if len(dfs) > 0:
+                df = dfs[0].dropna(subset=["종가"])
+                if not df.empty:
+                    prices = df["종가"].astype(int).tolist()
+                    closes.extend(prices)
+            time.sleep(0.02)
     except Exception:
         pass
+    
     if len(closes) < 20: return None
+    # 수집된 데이터 중 최대 120일 추출
     window = closes[: min(120, len(closes))]
     return sum(window) / len(window)
 
@@ -354,7 +343,6 @@ for key, df in st.session_state.portfolio.items():
         return "유지"
     
     def ma_tag(r):
-        # KODEX 미국머니마켓액티브(0048J0) 또는 코드가 없는 현금성 자산은 이평선 계산 제외('-' 출력)
         if not r["코드"] or r["ETF명"] == "KODEX 미국머니마켓액티브": return "-"
         ma = fetch_ma120(r["코드"])
         if ma is None or not r["현재가"]: return "미확인"
