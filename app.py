@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 / 2단 레이아웃 (차트 좌측 이동 및 우측 가이드 삽입)
+- 전문 AgGrid 라이브러리 / 2단 레이아웃 (도넛 차트 범례 제거 및 가이드 문구 한줄화)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -194,16 +194,14 @@ def render_donut(cat_totals: dict, key: str):
             values=values, 
             hole=0.55,
             marker=dict(colors=colors, line=dict(color="#fff", width=2)),
-            # 텍스트 라벨을 HTML <b> 태그를 이용해 강제로 굵게 처리
             texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
-            textfont=dict(size=14, color="#000000") # 진한 검정색 및 폰트 크기 확대
+            textfont=dict(size=14, color="#000000")
         )]
     )
     fig.update_layout(
-        margin=dict(t=10, b=10, l=0, r=0), # 좌우 여백을 최소화하여 좌측 정렬 효과 극대화
+        margin=dict(t=10, b=10, l=0, r=0), 
         height=320,
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.15)
+        showlegend=False # 범례 삭제
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
@@ -314,7 +312,6 @@ for i, key in enumerate(["dc", "pension", "irp"]):
 st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
 
-# 헤더 중앙 정렬 커스텀 CSS 주입
 custom_css = {
     ".ag-header-cell-label": {"justify-content": "center !important"},
     ".ag-header-cell": {"text-align": "center !important"}
@@ -387,16 +384,15 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         # =======================================================
         # 하단 2단 분할 레이아웃: 왼쪽(차트) / 오른쪽(가이드)
         # =======================================================
-        st.write("") # 약간의 여백 추가
-        chart_col, info_col = st.columns([1, 1.3]) # 1대 1.3 비율로 우측 공간을 좀 더 넉넉하게 배분
+        st.write("") 
+        chart_col, info_col = st.columns([1, 1.3]) 
         
         with chart_col:
-            # 차트 위에 제목 표시 (중앙 정렬)
             st.markdown(f"<h4 style='text-align: center; color: #0f172a;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
             render_donut(cat_totals, key)
             
         with info_col:
-            # 우측 여백에 들어갈 깔끔한 안내 카드 디자인
+            # 리밸런싱 가이드 문구 1줄로 수정 적용
             rule_html = """
             <div style="background-color: #f8fafc; padding: 25px 30px; border-radius: 12px; border: 1px solid #cbd5e1; height: 95%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center;">
                 <h4 style="margin-top: 0; color: #0f172a; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
@@ -404,7 +400,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 <p style="font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
                 <ul style="font-size: 1.05rem; font-weight: 600; color: #334155; line-height: 1.8; margin-top: 0; padding-left: 25px;">
                     <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <br>&nbsp;&nbsp;&nbsp;&nbsp;👉 <span style="color:#0f172a; font-weight:800; background-color:#e2e8f0; padding:2px 8px; border-radius:6px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#0f172a; font-weight:800; background-color:#e2e8f0; padding:2px 8px; border-radius:6px;">KODEX 미국머니마켓액티브</span>로 변경</li>
                 </ul>
             </div>
             """
