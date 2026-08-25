@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 탭 메뉴 1.5배 확대, 비활성 탭(흰색), 활성 탭(빨간색) 강제 주입
+- 탭(Tab) 글자 1.5배 확대 및 비활성(흰색) / 활성(빨간색) 강제 적용
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -34,39 +34,31 @@ st.markdown(
             color: #f8fafc;
         }
         
-        /* 상단 여백을 대폭 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 */
-        .block-container, div[data-testid="stAppViewBlockContainer"] { 
+        /* 상단 여백을 넉넉하게 주어 제목(이모지 포함) 윗부분 짤림 방지 */
+        .block-container { 
             padding-top: 3.5rem !important; 
-            padding-bottom: 1rem !important; 
-            max-width: 95% !important; 
+            padding-bottom: 1rem; 
+            max-width: 95%; 
         }
         
-        /* 🔥 탭(Tab) 폰트 1.5배 확대 및 색상 강제 지정 (스트림릿 강제 무력화) 🔥 */
+        /* 🔥 탭(Tab) 폰트 1.5배 확대 및 색상 완벽 강제 고정 🔥 */
         
-        /* 1. 비활성 탭 (선택 안 된 상태) */
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="false"] {
-            opacity: 1 !important; 
-            background-color: transparent !important;
-            border: none !important;
+        /* 비활성화된 탭 (연금저축, 개인형 IRP 등) - 투명도 제거 및 흰색 적용 */
+        .stTabs button[aria-selected="false"] {
+            opacity: 1 !important;
         }
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="false"] p,
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="false"] span {
-            font-size: 1.5rem !important; /* 글씨 1.5배 확대 */
-            font-weight: 800 !important; /* 굵게 */
-            color: #ffffff !important; /* 배경과 대비되는 선명한 흰색 */
+        .stTabs button[aria-selected="false"] p {
+            font-size: 24px !important; /* 글자 크기 1.5배 */
+            font-weight: 800 !important; 
+            color: #ffffff !important; /* 배경에 묻히지 않는 완전한 흰색 */
             opacity: 1 !important;
         }
 
-        /* 2. 활성 탭 (선택된 상태) */
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-            background-color: transparent !important;
-            border: none !important;
-        }
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p,
-        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] span {
-            font-size: 1.5rem !important; /* 글씨 1.5배 확대 */
-            font-weight: 900 !important; /* 더 굵게 */
-            color: #ff4b4b !important; /* 활성 탭은 빨간색! */
+        /* 활성화된 탭 (현재 선택된 탭) - 선명한 빨간색 적용 */
+        .stTabs button[aria-selected="true"] p {
+            font-size: 24px !important; /* 글자 크기 1.5배 */
+            font-weight: 900 !important; 
+            color: #ff4b4b !important; /* 밑줄과 어울리는 선명한 빨간색 */
         }
         
         /* 새로고침 버튼 디자인 */
