@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 프리미엄 다크 테마 (AgGrid alpine-dark & Plotly dark) 적용
+- 하이 콘트라스트 모드 (다크 배경 + 화이트 표/블랙 텍스트 적용)
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,12 +23,12 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 모드 강제 적용)
+# 1. 스타일 세팅 (다크 배경 + 하이 콘트라스트)
 # ==========================================
 st.markdown(
     """
     <style>
-        /* 전체 배경을 어두운 네이비톤(Slate-900)으로 변경 */
+        /* 전체 배경을 어두운 네이비톤으로 유지 */
         .stApp {
             background-color: #0f172a;
             color: #f8fafc;
@@ -36,7 +36,6 @@ st.markdown(
         
         .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 헤더 및 카드 디자인 (어두운 배경 + 입체감 있는 그림자) */
         .dash-header {
             display:flex; justify-content:space-between; align-items:center;
             background:#1e293b; padding:14px 28px; border-radius:16px;
@@ -53,9 +52,9 @@ st.markdown(
         .summary-card label { font-size:1.1rem; color:#94a3b8; font-weight:700; }
         .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#f8fafc; }
         
-        .card-dc { border-left-color:#3b82f6; } /* Blue */
-        .card-pension { border-left-color:#10b981; } /* Emerald */
-        .card-irp { border-left-color:#8b5cf6; } /* Violet */
+        .card-dc { border-left-color:#3b82f6; } 
+        .card-pension { border-left-color:#10b981; } 
+        .card-irp { border-left-color:#8b5cf6; } 
         
         .status-badge {
             font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600;
@@ -109,13 +108,13 @@ BASE_PORTFOLIO = {
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
-# 다크모드에 맞춰 채도를 높인 형광/파스텔톤 네온 컬러로 변경
+# 도넛 차트용 파스텔 네온 컬러 (어두운 배경에 잘 보이게 유지)
 CATEGORY_COLORS = {
-    "주식": "#60a5fa", # Light Blue
-    "채권": "#fb923c", # Neon Orange
-    "실물": "#facc15", # Bright Yellow
-    "리츠": "#34d399", # Mint Green
-    "현금": "#cbd5e1", # Light Gray
+    "주식": "#60a5fa", 
+    "채권": "#fb923c", 
+    "실물": "#facc15", 
+    "리츠": "#34d399", 
+    "현금": "#cbd5e1", 
 }
 
 # ==========================================
@@ -209,12 +208,11 @@ def render_donut(cat_totals: dict, key: str):
             labels=labels, 
             values=values, 
             hole=0.55,
-            marker=dict(colors=colors, line=dict(color="#1e293b", width=2)), # 차트 테두리를 배경색으로
+            marker=dict(colors=colors, line=dict(color="#1e293b", width=2)),
             texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
-            textfont=dict(size=14, color="#ffffff") # 글자색을 흰색으로
+            textfont=dict(size=14, color="#ffffff") # 차트 위 폰트는 화이트 유지
         )]
     )
-    # 다크 테마(plotly_dark) 적용 및 배경 투명화
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor='rgba(0,0,0,0)',
@@ -225,16 +223,16 @@ def render_donut(cat_totals: dict, key: str):
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
-# 글자 색상을 형광/파스텔톤으로 변경
+# 표 내부(화이트 배경)를 위한 구분 색상 (글씨가 잘 보이도록 좀 더 진한 원색으로 복구)
 color_jscode = JsCode("""
 function(params) {
     var val = params.value;
-    if (val === '주식') { return {'color': '#60a5fa', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '채권') { return {'color': '#fb923c', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '실물') { return {'color': '#facc15', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '리츠') { return {'color': '#34d399', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '현금') { return {'color': '#cbd5e1', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    return {'textAlign': 'center'};
+    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '채권') { return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '실물') { return {'color': '#ca8a04', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '리츠') { return {'color': '#059669', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '현금') { return {'color': '#475569', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    return {'textAlign': 'center', 'color': '#000000'};
 }
 """)
 
@@ -243,9 +241,9 @@ class ChartLinkRenderer {
     init(params) {
         this.eGui = document.createElement('div');
         if (params.value && params.value !== '') {
-            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#60a5fa; font-weight:bold;">📊 열기</a>';
+            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
         } else {
-            this.eGui.innerHTML = '<span style="color: #94a3b8;">-</span>';
+            this.eGui.innerHTML = '<span style="color: #475569;">-</span>';
         }
     }
     getGui() {
@@ -353,33 +351,33 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 다크 테마에 맞춰 표 내부 글자색을 라이트 그레이/화이트로 설정 (#f8fafc)
-        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#f8fafc'})
+        # 표의 배경이 하얗기 때문에 글자색을 무조건 '진한 검정(#000000)'으로 복구합니다!!
+        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#f8fafc', 'fontWeight': '500'})
+        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
         gb.configure_column("목표비율", width=100, editable=False)
         
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
-        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
-        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
-        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         
-        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#f8fafc'})
+        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
-        gb.configure_column("이평선(120일)", width=120, editable=False)
+        gb.configure_column("이평선(120일)", width=120, editable=False, cellStyle={'textAlign': 'center', 'color': '#000000'})
         gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
 
-        # AgGrid 테마를 alpine에서 alpine-dark로 변경
+        # 표 테마를 기본 흰색 톤('alpine')으로 명시하여 하이 콘트라스트 유지
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
             update_mode=GridUpdateMode.VALUE_CHANGED, 
             allow_unsafe_jscode=True, 
-            theme='alpine-dark', 
+            theme='alpine', 
             custom_css=custom_css,
             fit_columns_on_grid_load=True, 
             key=f"grid_{key}"
@@ -412,7 +410,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             render_donut(cat_totals, key)
             
         with info_col:
-            # 다크 테마에 맞춰 가이드 박스 디자인 변경
             rule_html = """
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
                 <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
