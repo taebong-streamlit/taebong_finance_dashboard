@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 전문 AgGrid 라이브러리 / 2단 레이아웃 (도넛 차트 범례 제거 및 가이드 문구 한줄화)
+- 프리미엄 다크 테마 (AgGrid alpine-dark & Plotly dark) 적용
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,35 +23,46 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅
+# 1. 스타일 세팅 (다크 모드 강제 적용)
 # ==========================================
 st.markdown(
     """
     <style>
+        /* 전체 배경을 어두운 네이비톤(Slate-900)으로 변경 */
+        .stApp {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        
         .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
+        
+        /* 헤더 및 카드 디자인 (어두운 배경 + 입체감 있는 그림자) */
         .dash-header {
             display:flex; justify-content:space-between; align-items:center;
-            background:#fff; padding:14px 28px; border-radius:16px;
-            box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #e2e8f0;
+            background:#1e293b; padding:14px 28px; border-radius:16px;
+            box-shadow:0 4px 15px rgba(0,0,0,0.3); border:1px solid #334155;
             margin-bottom:6px;
         }
-        .dash-header h1 { font-size:2.5rem; font-weight:800; color:#0f172a; margin:0; }
+        .dash-header h1 { font-size:2.5rem; font-weight:800; color:#f8fafc; margin:0; }
+        
+        .summary-card {
+            background:#1e293b; padding:12px 20px; border-radius:14px;
+            box-shadow:0 4px 10px rgba(0,0,0,0.2); border:1px solid #334155;
+            border-left:5px solid #3b82f6;
+        }
+        .summary-card label { font-size:1.1rem; color:#94a3b8; font-weight:700; }
+        .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#f8fafc; }
+        
+        .card-dc { border-left-color:#3b82f6; } /* Blue */
+        .card-pension { border-left-color:#10b981; } /* Emerald */
+        .card-irp { border-left-color:#8b5cf6; } /* Violet */
+        
         .status-badge {
             font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600;
         }
-        .status-loading { background:#fef9c3; color:#854d0e; }
-        .status-success { background:#dcfce7; color:#166534; }
-        .status-manual { background:#fee2e2; color:#991b1b; }
-        .summary-card {
-            background:#fff; padding:12px 20px; border-radius:14px;
-            box-shadow:0 2px 4px rgba(0,0,0,0.03); border:1px solid #e2e8f0;
-            border-left:5px solid #2563eb;
-        }
-        .summary-card label { font-size:1.1rem; color:#475569; font-weight:700; }
-        .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#0f172a; }
-        .card-dc { border-left-color:#2563eb; }
-        .card-pension { border-left-color:#10b981; }
-        .card-irp { border-left-color:#8b5cf6; }
+        .status-loading { background:#78350f; color:#fef3c7; }
+        .status-success { background:#064e3b; color:#d1fae5; }
+        .status-manual { background:#7f1d1d; color:#fee2e2; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -98,8 +109,13 @@ BASE_PORTFOLIO = {
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
+# 다크모드에 맞춰 채도를 높인 형광/파스텔톤 네온 컬러로 변경
 CATEGORY_COLORS = {
-    "주식": "#2563eb", "채권": "#f59e0b", "실물": "#eab308", "리츠": "#10b981", "현금": "#94a3b8",
+    "주식": "#60a5fa", # Light Blue
+    "채권": "#fb923c", # Neon Orange
+    "실물": "#facc15", # Bright Yellow
+    "리츠": "#34d399", # Mint Green
+    "현금": "#cbd5e1", # Light Gray
 }
 
 # ==========================================
@@ -193,26 +209,31 @@ def render_donut(cat_totals: dict, key: str):
             labels=labels, 
             values=values, 
             hole=0.55,
-            marker=dict(colors=colors, line=dict(color="#fff", width=2)),
+            marker=dict(colors=colors, line=dict(color="#1e293b", width=2)), # 차트 테두리를 배경색으로
             texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
-            textfont=dict(size=14, color="#000000")
+            textfont=dict(size=14, color="#ffffff") # 글자색을 흰색으로
         )]
     )
+    # 다크 테마(plotly_dark) 적용 및 배경 투명화
     fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(t=10, b=10, l=0, r=0), 
         height=320,
-        showlegend=False # 범례 삭제
+        showlegend=False 
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
+# 글자 색상을 형광/파스텔톤으로 변경
 color_jscode = JsCode("""
 function(params) {
     var val = params.value;
-    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '채권') { return {'color': '#f59e0b', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '실물') { return {'color': '#eab308', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '리츠') { return {'color': '#10b981', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '현금') { return {'color': '#94a3b8', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '주식') { return {'color': '#60a5fa', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '채권') { return {'color': '#fb923c', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '실물') { return {'color': '#facc15', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '리츠') { return {'color': '#34d399', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '현금') { return {'color': '#cbd5e1', 'fontWeight': 'bold', 'textAlign': 'center'}; }
     return {'textAlign': 'center'};
 }
 """)
@@ -222,9 +243,9 @@ class ChartLinkRenderer {
     init(params) {
         this.eGui = document.createElement('div');
         if (params.value && params.value !== '') {
-            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
+            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#60a5fa; font-weight:bold;">📊 열기</a>';
         } else {
-            this.eGui.innerHTML = '<span style="color: #000;">-</span>';
+            this.eGui.innerHTML = '<span style="color: #94a3b8;">-</span>';
         }
     }
     getGui() {
@@ -265,7 +286,7 @@ elif status["success"] == status["total"]:
     st.markdown(f'<span class="status-badge status-success">✅ 시세 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
 else:
     st.markdown(f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
-st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
 # ==========================================
 # 7. 통합 로직 및 UI 렌더링
@@ -309,7 +330,7 @@ with summary_cols[0]:
 for i, key in enumerate(["dc", "pension", "irp"]):
     with summary_cols[i + 1]:
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
-st.markdown("<hr style='margin:0.3rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
 
 custom_css = {
@@ -332,31 +353,33 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
+        # 다크 테마에 맞춰 표 내부 글자색을 라이트 그레이/화이트로 설정 (#f8fafc)
+        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#f8fafc'})
         
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '500'})
+        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#f8fafc', 'fontWeight': '500'})
         gb.configure_column("목표비율", width=100, editable=False)
         
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
+        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
+        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
+        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#f8fafc'})
         
-        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
+        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#f8fafc'})
         
         gb.configure_column("이평선(120일)", width=120, editable=False)
         gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
 
+        # AgGrid 테마를 alpine에서 alpine-dark로 변경
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
             update_mode=GridUpdateMode.VALUE_CHANGED, 
             allow_unsafe_jscode=True, 
-            theme='alpine', 
+            theme='alpine-dark', 
             custom_css=custom_css,
             fit_columns_on_grid_load=True, 
             key=f"grid_{key}"
@@ -381,26 +404,23 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
                     st.rerun()
 
-        # =======================================================
-        # 하단 2단 분할 레이아웃: 왼쪽(차트) / 오른쪽(가이드)
-        # =======================================================
         st.write("") 
         chart_col, info_col = st.columns([1, 1.3]) 
         
         with chart_col:
-            st.markdown(f"<h4 style='text-align: center; color: #0f172a;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
             render_donut(cat_totals, key)
             
         with info_col:
-            # 리밸런싱 가이드 문구 1줄로 수정 적용
+            # 다크 테마에 맞춰 가이드 박스 디자인 변경
             rule_html = """
-            <div style="background-color: #f8fafc; padding: 25px 30px; border-radius: 12px; border: 1px solid #cbd5e1; height: 95%; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center;">
-                <h4 style="margin-top: 0; color: #0f172a; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
-                <p style="font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#2563eb;">매월 1일</span></p>
-                <p style="font-size: 1.1rem; font-weight: 700; color: #1e293b; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
-                <ul style="font-size: 1.05rem; font-weight: 600; color: #334155; line-height: 1.8; margin-top: 0; padding-left: 25px;">
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#0f172a; font-weight:800; background-color:#e2e8f0; padding:2px 8px; border-radius:6px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+            <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+                <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
+                <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
+                <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#ef4444;">상단</span></b> : 해당 ETF 보유</li>
+                    <li><b>일봉차트 120일 이동평균선 <span style="color:#60a5fa;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#f8fafc; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
                 </ul>
             </div>
             """
