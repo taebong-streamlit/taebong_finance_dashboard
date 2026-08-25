@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 탭(Tab) 메뉴 버튼형 디자인으로 전면 개편 (노란색/파란색 고대비 적용)
+- 탭(Tab) 글자 1.5배 확대 및 활성(빨강)/비활성(흰색) 완벽 식별 적용
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 탭 디자인 전면 개편)
+# 1. 스타일 세팅 (다크 배경 + 탭 내부 텍스트 완벽 제어)
 # ==========================================
 st.markdown(
     """
@@ -37,35 +37,24 @@ st.markdown(
         /* 상단 여백을 늘려 제목 윗부분이 짤리지 않도록 넉넉하게 확보 */
         .block-container { padding-top: 2.5rem; padding-bottom: 1rem; max-width: 95%; }
         
-        /* 🔥 탭(Tab) 디자인 완전히 새로 쓰기 (보호색 현상 원천 차단) 🔥 */
-        div[data-baseweb="tab-list"] {
-            gap: 10px; /* 탭 사이 간격 */
-        }
-        button[data-baseweb="tab"] {
-            opacity: 1 !important; 
-            background-color: #1e293b !important; /* 비활성 탭 배경: 남색 */
-            border: 1px solid #334155 !important;
-            border-bottom: none !important;
-            border-radius: 12px 12px 0 0 !important;
-            padding: 10px 24px !important;
-        }
-        button[data-baseweb="tab"] p, 
-        button[data-baseweb="tab"] span {
-            color: #fde047 !important; /* 🌟 비활성 탭 글씨: 밝은 레몬/노란색으로 확 띄게! */
-            font-size: 1.2rem !important;
-            font-weight: 700 !important; 
-            opacity: 1 !important; 
-        }
+        /* 🔥 탭(Tab) 폰트 1.5배 확대 & 색상 완벽 제어 🔥 */
         
-        /* 현재 선택된 활성 탭은 배경 자체를 파란색으로! */
-        button[data-baseweb="tab"][aria-selected="true"] {
-            background-color: #3b82f6 !important; /* 활성 탭 배경: 밝은 파란색 */
-            border-color: #3b82f6 !important;
+        /* 1. 비활성 탭 (선택 안 된 상태) - 투명도 제거 및 눈에 띄는 완전 흰색 */
+        button[data-baseweb="tab"][aria-selected="false"] {
+            opacity: 1 !important; 
         }
-        button[data-baseweb="tab"][aria-selected="true"] p,
-        button[data-baseweb="tab"][aria-selected="true"] span {
-            color: #ffffff !important; /* 활성 탭 글씨: 완전 흰색 */
-            font-weight: 900 !important; 
+        button[data-baseweb="tab"][aria-selected="false"] div[data-testid="stMarkdownContainer"] p {
+            font-size: 1.5rem !important; /* 글씨 1.5배 크게 */
+            font-weight: 800 !important; /* 굵게 */
+            color: #ffffff !important; /* 배경과 대비되는 선명한 흰색 */
+            opacity: 1 !important;
+        }
+
+        /* 2. 활성 탭 (선택된 상태) - 빨간색 밑줄에 맞춰 선명한 빨간색으로 통일 */
+        button[data-baseweb="tab"][aria-selected="true"] div[data-testid="stMarkdownContainer"] p {
+            font-size: 1.5rem !important; /* 글씨 1.5배 크게 */
+            font-weight: 900 !important; /* 아주 굵게 */
+            color: #ff4b4b !important; /* 선명한 빨간색 */
         }
         
         /* 새로고침 버튼 글자색 강제 고정 */
