@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 하이 콘트라스트 모드 (다크 배경 + 화이트 표/블랙 텍스트 적용)
+- 제목 박스 제거 및 버튼/탭 가독성(UI) 완벽 개선 적용
 필요 패키지: streamlit pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -23,7 +23,7 @@ st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈",
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 # ==========================================
-# 1. 스타일 세팅 (다크 배경 + 하이 콘트라스트)
+# 1. 스타일 세팅 (다크 배경 + 가독성 해결)
 # ==========================================
 st.markdown(
     """
@@ -36,14 +36,34 @@ st.markdown(
         
         .block-container { padding-top: 0.8rem; padding-bottom: 1rem; max-width: 95%; }
         
-        .dash-header {
-            display:flex; justify-content:space-between; align-items:center;
-            background:#1e293b; padding:14px 28px; border-radius:16px;
-            box-shadow:0 4px 15px rgba(0,0,0,0.3); border:1px solid #334155;
-            margin-bottom:6px;
+        /* 탭(Tab) 글자색 강제 고정 (마우스 호버 전에도 잘 보이게) */
+        button[data-baseweb="tab"] p {
+            color: #94a3b8 !important; /* 평상시 밝은 회색 */
+            font-size: 1.15rem !important;
+            font-weight: 600 !important;
         }
-        .dash-header h1 { font-size:2.5rem; font-weight:800; color:#f8fafc; margin:0; }
+        button[data-baseweb="tab"][aria-selected="true"] p {
+            color: #ffffff !important; /* 선택된 탭은 완전 흰색 */
+            font-weight: 800 !important;
+        }
         
+        /* 새로고침 버튼 글자색 강제 고정 */
+        div[data-testid="stButton"] button {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+        }
+        div[data-testid="stButton"] button p {
+            color: #f8fafc !important; /* 버튼 텍스트 흰색 */
+            font-weight: 600 !important;
+        }
+        div[data-testid="stButton"] button:hover {
+            border-color: #60a5fa !important;
+        }
+        div[data-testid="stButton"] button:hover p {
+            color: #60a5fa !important; /* 마우스 올리면 파란색 포인트 */
+        }
+        
+        /* 요약 카드 디자인 */
         .summary-card {
             background:#1e293b; padding:12px 20px; border-radius:14px;
             box-shadow:0 4px 10px rgba(0,0,0,0.2); border:1px solid #334155;
@@ -108,7 +128,6 @@ BASE_PORTFOLIO = {
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
-# 도넛 차트용 파스텔 네온 컬러 (어두운 배경에 잘 보이게 유지)
 CATEGORY_COLORS = {
     "주식": "#60a5fa", 
     "채권": "#fb923c", 
@@ -210,7 +229,7 @@ def render_donut(cat_totals: dict, key: str):
             hole=0.55,
             marker=dict(colors=colors, line=dict(color="#1e293b", width=2)),
             texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
-            textfont=dict(size=14, color="#ffffff") # 차트 위 폰트는 화이트 유지
+            textfont=dict(size=14, color="#ffffff")
         )]
     )
     fig.update_layout(
@@ -223,7 +242,6 @@ def render_donut(cat_totals: dict, key: str):
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
-# 표 내부(화이트 배경)를 위한 구분 색상 (글씨가 잘 보이도록 좀 더 진한 원색으로 복구)
 color_jscode = JsCode("""
 function(params) {
     var val = params.value;
@@ -260,7 +278,8 @@ amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleStri
 # ==========================================
 header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
-    st.markdown('<div class="dash-header"><div><h1>📈 태봉의 연금자산 관리</h1></div></div>', unsafe_allow_html=True)
+    # 박스를 벗겨내고 크고 깔끔한 텍스트 폰트로만 제목 적용
+    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#f8fafc; margin-bottom: 20px; padding-top: 15px;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
 do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
 
@@ -351,7 +370,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         
-        # 표의 배경이 하얗기 때문에 글자색을 무조건 '진한 검정(#000000)'으로 복구합니다!!
         gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
@@ -371,7 +389,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
 
         gridOptions = gb.build()
 
-        # 표 테마를 기본 흰색 톤('alpine')으로 명시하여 하이 콘트라스트 유지
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
