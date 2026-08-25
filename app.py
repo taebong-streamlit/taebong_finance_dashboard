@@ -1,7 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 + 120일 이동평균선 실계산
-- 보유수량 수정 시 평가금액, 현재비율, 목표수량, 조정필요 자동 실시간 연산 적용
+- KODEX 미국머니마켓액티브 이평선 '-' 처리 적용
 필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml streamlit-aggrid
 실행: streamlit run app.py
 """
@@ -354,7 +354,8 @@ for key, df in st.session_state.portfolio.items():
         return "유지"
     
     def ma_tag(r):
-        if not r["코드"]: return "-"
+        # KODEX 미국머니마켓액티브(0048J0) 또는 코드가 없는 현금성 자산은 이평선 계산 제외('-' 출력)
+        if not r["코드"] or r["ETF명"] == "KODEX 미국머니마켓액티브": return "-"
         ma = fetch_ma120(r["코드"])
         if ma is None or not r["현재가"]: return "미확인"
         return "🔥 상단" if r["현재가"] >= ma else "🧊 하단"
@@ -386,7 +387,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
         
-        # 화면에 보여줄 데이터 프레임 구성 (현재가, 보유수량만 편집 가능)
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선(120일)', '목표수량', '조정필요', '차트']].copy()
         
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
@@ -404,11 +404,10 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        
-        # 그 외 항목은 자동 계산되므로 수정 불가 설정
         gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
         gb.configure_column("이평선(120일)", width=120, editable=False, cellStyle={'textAlign': 'center', 'color': '#000000'})
@@ -435,7 +434,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 edited_df = edited_data
                 
             if not edited_df.empty:
-                # 콤마, 원, 주 등의 문자를 제거하고 숫자로 깨끗하게 변환
                 def clean_numeric(val):
                     if pd.isna(val): return 0
                     s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
@@ -453,8 +451,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all():
                     st.session_state.portfolio[key]["현재가"] = new_prices
                     st.session_state.portfolio[key]["보유수량"] = new_amounts
-                    
-                    # 변경 즉시 JSON 파일에 저장하고 화면 새로고침하여 전체 지표(평가금액, 현재비율, 목표수량 등) 자동 갱신
                     save_portfolio_to_file(st.session_state.portfolio)
                     st.rerun()
 
