@@ -3,6 +3,4 @@ pandas
 requests
 beautifulsoup4
 plotly
-lxml
-html5lib
 streamlit-aggrid
