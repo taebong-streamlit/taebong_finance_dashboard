@@ -1,9 +1,7 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 연동
-- 이평선 셀 배경 음영 제거 및 글자 색상(상단:빨강, 하단:파랑)만 표시
-필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml html5lib streamlit-aggrid
-실행: streamlit run app.py
+- 이평선 수동 선택(상단/하단) 및 전 계좌 자동 연동, 파일 영속성 지원
 """
 
 import os
@@ -31,20 +29,15 @@ DATA_FILE = "portfolio_data.json"
 st.markdown(
     """
     <style>
-        /* 전체 배경을 어두운 네이비톤으로 유지 */
         .stApp {
             background-color: #0f172a;
             color: #f8fafc;
         }
-        
-        /* 상단 여백 확보 (제목 짤림 방지) */
         .block-container { 
             padding-top: 3.5rem !important; 
             padding-bottom: 1rem; 
             max-width: 95%; 
         }
-        
-        /* 새로고침 버튼 디자인 */
         div[data-testid="stButton"] button {
             background-color: #1e293b !important;
             border: 1px solid #475569 !important;
@@ -59,8 +52,6 @@ st.markdown(
         div[data-testid="stButton"] button:hover p {
             color: #60a5fa !important; 
         }
-        
-        /* 요약 카드 디자인 */
         .summary-card {
             background:#1e293b; padding:12px 20px; border-radius:14px;
             box-shadow:0 4px 10px rgba(0,0,0,0.2); border:1px solid #334155;
@@ -78,14 +69,13 @@ st.markdown(
         }
         .status-loading { background:#78350f; color:#fef3c7; }
         .status-success { background:#064e3b; color:#d1fae5; }
-        .status-manual { background:#7f1d1d; color:#fee2e2; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ==========================================
-# 2. 포트폴리오 기본 데이터 (파일 입출력 연동)
+# 2. 포트폴리오 기본 데이터
 # ==========================================
 DEFAULT_PORTFOLIO = {
     "dc": [
@@ -248,7 +238,6 @@ function(params) {
 }
 """)
 
-# 이평선(상단: 빨간 글씨, 하단: 파란 글씨) - 배경 음영 제거
 ma_color_jscode = JsCode("""
 function(params) {
     var val = params.value;
