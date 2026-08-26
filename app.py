@@ -1,21 +1,16 @@
 """
-연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 스트림릿 기본 data_editor 활용 (패키지 충돌 에러 원천 차단)
-- 보유수량 및 이평선 수동 수정 시 파일 자동 저장 및 전 계좌 연동
+태봉의 연금자산 관리 대시보드 (Streamlit 기본형 - 설치 에러 제로)
 """
 
 import os
 import json
-import requests
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
-from bs4 import BeautifulSoup
 
 # 페이지 설정
 st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈", layout="wide")
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 DATA_FILE = "portfolio_data.json"
 
 # 스타일 세팅
@@ -24,11 +19,6 @@ st.markdown(
     <style>
         .stApp { background-color: #0f172a; color: #f8fafc; }
         .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem; max-width: 95%; }
-        div[data-testid="stButton"] button {
-            background-color: #1e293b !important; border: 1px solid #475569 !important;
-        }
-        div[data-testid="stButton"] button p { color: #ffffff !important; font-weight: 700 !important; }
-        div[data-testid="stButton"] button:hover { border-color: #60a5fa !important; }
         .summary-card {
             background: #1e293b; padding: 12px 20px; border-radius: 14px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 1px solid #334155;
@@ -39,9 +29,6 @@ st.markdown(
         .card-dc { border-left-color: #3b82f6; } 
         .card-pension { border-left-color: #10b981; } 
         .card-irp { border-left-color: #8b5cf6; } 
-        .status-badge { font-size: 0.85rem; padding: 6px 14px; border-radius: 20px; font-weight: 600; }
-        .status-loading { background: #78350f; color: #fef3c7; }
-        .status-success { background: #064e3b; color: #d1fae5; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -49,37 +36,37 @@ st.markdown(
 
 DEFAULT_PORTFOLIO = {
     "dc": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 5440, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 4094, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 3300, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 2131, "이평선": "하단"},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 14611, "이평선": "하단"},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 1235, "이평선": "하단"},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 11241, "이평선": "-"},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "현재가": 10500, "보유수량": 5440, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "현재가": 10800, "보유수량": 4094, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "현재가": 10200, "보유수량": 3300, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "현재가": 10300, "보유수량": 2131, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "현재가": 5500, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "현재가": 9800, "보유수량": 14611, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "현재가": 15000, "보유수량": 1235, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "현재가": 100000, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "현재가": 1, "보유수량": 11241, "이평선": "-"},
     ],
     "pension": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 2174, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 1596, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 1320, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 834, "이평선": "하단"},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 5770, "이평선": "하단"},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 505, "이평선": "하단"},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 5511, "이평선": "-"},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "현재가": 10500, "보유수량": 2174, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "현재가": 10800, "보유수량": 1596, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "현재가": 10200, "보유수량": 1320, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "현재가": 10300, "보유수량": 834, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "현재가": 5500, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "현재가": 9800, "보유수량": 5770, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "현재가": 15000, "보유수량": 505, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "현재가": 100000, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "현재가": 1, "보유수량": 5511, "이평선": "-"},
     ],
     "irp": [
-        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "보유수량": 925, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "보유수량": 693, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "보유수량": 565, "이평선": "하단"},
-        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "보유수량": 375, "이평선": "하단"},
-        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "보유수량": 0, "이평선": "하단"},
-        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "보유수량": 2499, "이평선": "하단"},
-        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "보유수량": 212, "이평선": "하단"},
-        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "보유수량": 0, "이평선": "-"},
-        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 7325, "이평선": "-"},
+        {"구분": "주식", "ETF명": "TIGER 미국S&P500타겟데일리커버드콜", "코드": "482730", "목표비율": 0.20, "현재가": 10500, "보유수량": 925, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국나스닥100타겟데일리커버드콜", "코드": "486290", "목표비율": 0.10, "현재가": 10800, "보유수량": 693, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "TIGER 미국배당다우존스타겟데일리커버드콜", "코드": "0008S0", "목표비율": 0.10, "현재가": 10200, "보유수량": 565, "이평선": "하단"},
+        {"구분": "주식", "ETF명": "KODEX 200타겟위클리커버드콜", "코드": "498400", "목표비율": 0.15, "현재가": 10300, "보유수량": 375, "이평선": "하단"},
+        {"구분": "리츠", "ETF명": "KODEX 한국부동산리츠인프라", "코드": "476800", "목표비율": 0.05, "현재가": 5500, "보유수량": 0, "이평선": "하단"},
+        {"구분": "채권", "ETF명": "TIGER 미국30년국채커버드콜액티브(H)", "코드": "476550", "목표비율": 0.30, "현재가": 9800, "보유수량": 2499, "이평선": "하단"},
+        {"구분": "실물", "ETF명": "ACE KRX금현물", "코드": "411060", "목표비율": 0.10, "현재가": 15000, "보유수량": 212, "이평선": "하단"},
+        {"구분": "현금", "ETF명": "KODEX 미국머니마켓액티브", "코드": "0048J0", "목표비율": 0.00, "현재가": 100000, "보유수량": 0, "이평선": "-"},
+        {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "현재가": 1, "보유수량": 7325, "이평선": "-"},
     ],
 }
 
@@ -91,10 +78,6 @@ def load_portfolio_from_file():
                 portfolio = {}
                 for key, items in saved_data.items():
                     df = pd.DataFrame(items)
-                    if "현재가" not in df.columns:
-                        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
-                    if "이평선" not in df.columns:
-                        df["이평선"] = df["ETF명"].apply(lambda name: "-" if "머니마켓" in name or name == "원화 현금" else "하단")
                     portfolio[key] = df
                 return portfolio
         except Exception:
@@ -102,9 +85,7 @@ def load_portfolio_from_file():
     
     portfolio = {}
     for key, items in DEFAULT_PORTFOLIO.items():
-        df = pd.DataFrame(items)
-        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
-        portfolio[key] = df
+        portfolio[key] = pd.DataFrame(items)
     save_portfolio_to_file(portfolio)
     return portfolio
 
@@ -112,7 +93,7 @@ def save_portfolio_to_file(portfolio_dict):
     try:
         data_to_save = {}
         for key, df in portfolio_dict.items():
-            sub_df = df[["구분", "ETF명", "코드", "목표비율", "보유수량", "이평선"]].copy()
+            sub_df = df[["구분", "ETF명", "코드", "목표비율", "현재가", "보유수량", "이평선"]].copy()
             data_to_save[key] = sub_df.to_dict(orient="records")
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
@@ -126,71 +107,8 @@ CATEGORY_COLORS = {"주식": "#60a5fa", "채권": "#fb923c", "실물": "#facc15"
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = load_portfolio_from_file()
 
-if "fetch_status" not in st.session_state:
-    st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
-
-@st.cache_data(ttl=60, show_spinner=False)
-def fetch_current_price(code: str):
-    if not code: return 1
-    url = f"https://finance.naver.com/item/main.naver?code={code}"
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=3)
-        soup = BeautifulSoup(res.text, "html.parser")
-        no_today = soup.find("p", class_="no_today")
-        if no_today:
-            return int(no_today.find("span", class_="blind").text.replace(",", ""))
-    except Exception:
-        pass
-    return None
-
-def fetch_all_prices(codes: list[str]):
-    prices, success = {}, 0
-    for code in codes:
-        p = fetch_current_price(code)
-        prices[code] = p
-        if p is not None: success += 1
-    return prices, success
-
-def get_unique_codes():
-    codes = set()
-    for df in st.session_state.portfolio.values():
-        codes.update(c for c in df["코드"].tolist() if c)
-    return sorted(codes)
-
-def render_donut(cat_totals: dict, key: str):
-    labels = [k for k, v in cat_totals.items() if v > 0]
-    values = [v for v in cat_totals.values() if v > 0]
-    colors = [CATEGORY_COLORS.get(l, "#cbd5e1") for l in labels]
-    fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.55, marker=dict(colors=colors, line=dict(color="#1e293b", width=2)), texttemplate="<b>%{label}</b><br><b>%{percent}</b>", textfont=dict(size=14, color="#ffffff"))])
-    fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=10, l=0, r=0), height=320, showlegend=False)
-    st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
-
-# 헤더 및 시세 호출
-header_col1, _ = st.columns([4, 1])
-with header_col1:
-    st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
-
-do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
-
-if do_refresh:
-    fetch_current_price.clear()
-    st.session_state.fetch_status["done"] = False
-
-if not st.session_state.fetch_status["done"] or do_refresh:
-    codes = get_unique_codes()
-    with st.spinner("실시간 시세를 불러오는 중입니다..."):
-        prices, success = fetch_all_prices(codes)
-        for key, df in st.session_state.portfolio.items():
-            df["현재가"] = df.apply(lambda r: prices.get(r["코드"], r["현재가"]) if r["코드"] else 1, axis=1)
-        st.session_state.fetch_status = {"done": True, "success": success, "total": len(codes)}
-
-status = st.session_state.fetch_status
-if status["total"] == 0:
-    st.markdown('<span class="status-badge status-loading">🌐 대기 중</span>', unsafe_allow_html=True)
-elif status["success"] == status["total"]:
-    st.markdown(f'<span class="status-badge status-success">✅ 시세 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
-else:
-    st.markdown(f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
+# 헤더
+st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
 grand_total = 0
@@ -218,6 +136,7 @@ for key, df in st.session_state.portfolio.items():
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
     computed[key] = (df_calc, total_eval, cat_totals)
 
+# 요약 카드
 summary_cols = st.columns(4)
 with summary_cols[0]:
     st.markdown(f'<div class="summary-card"><label>총 연금 자산 평가액</label><div class="value">{grand_total:,.0f} 원</div></div>', unsafe_allow_html=True)
@@ -226,16 +145,14 @@ for i, key in enumerate(["dc", "pension", "irp"]):
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
+# 탭 구성
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
-        
-        # 편집용 데이터프레임 구성
         editor_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
         editor_df['목표비율'] = editor_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
         
-        # 스트림릿 내장 data_editor 설정
         edited_df = st.data_editor(
             editor_df,
             column_config={
@@ -256,7 +173,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             key=f"editor_{key}"
         )
 
-        # 수정 사항 감지 및 자동 저장
         if edited_df is not None:
             new_prices = edited_df["현재가"].astype(int).values
             new_amounts = edited_df["보유수량"].astype(int).values
@@ -275,8 +191,6 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     etf_name = row["ETF명"]
                     new_val = new_mas[idx]
                     updated_mas.append(new_val)
-                    
-                    # 동일 종목 전 계좌 연동
                     for other_k in st.session_state.portfolio.keys():
                         mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
                         st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
@@ -289,7 +203,13 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         chart_col, info_col = st.columns([1, 1.3]) 
         with chart_col:
             st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
-            render_donut(cat_totals, key)
+            labels = [k for k, v in cat_totals.items() if v > 0]
+            values = [v for v in cat_totals.values() if v > 0]
+            colors = [CATEGORY_COLORS.get(l, "#cbd5e1") for l in labels]
+            fig = go.Figure(data=[go.Pie(labels=labels, values=values, hole=0.55, marker=dict(colors=colors, line=dict(color="#1e293b", width=2)), texttemplate="<b>%{label}</b><br><b>%{percent}</b>", textfont=dict(size=14, color="#ffffff"))])
+            fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=10, l=0, r=0), height=320, showlegend=False)
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
+            
         with info_col:
             st.markdown("""
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
