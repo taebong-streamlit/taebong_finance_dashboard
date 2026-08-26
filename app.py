@@ -1,8 +1,6 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 네이버 금융 실시간 시세 연동
-- 이평선 수정 시 동일 종목 전 계좌 자동 연동
-- AgGrid 프론트엔드 충돌 원인(Custom CSS 및 불안정 JS) 완전 제거본
+- 파이썬 크래시(Oh no 에러) 유발 데이터 매칭 버그 완벽 수정본
 """
 
 import os
@@ -135,6 +133,7 @@ CATEGORY_COLORS = {"주식": "#60a5fa", "채권": "#fb923c", "실물": "#facc15"
 
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = load_portfolio_from_file()
+
 if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
@@ -172,34 +171,24 @@ def render_donut(cat_totals: dict, key: str):
     colors = [CATEGORY_COLORS.get(l, "#cbd5e1") for l in labels]
     fig = go.Figure(
         data=[go.Pie(
-            labels=labels, 
-            values=values, 
-            hole=0.55,
+            labels=labels, values=values, hole=0.55,
             marker=dict(colors=colors, line=dict(color="#1e293b", width=2)),
-            texttemplate="<b>%{label}</b><br><b>%{percent}</b>", 
-            textfont=dict(size=14, color="#ffffff")
+            texttemplate="<b>%{label}</b><br><b>%{percent}</b>", textfont=dict(size=14, color="#ffffff")
         )]
     )
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(t=10, b=10, l=0, r=0), 
-        height=320,
-        showlegend=False 
-    )
+    fig.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=10, l=0, r=0), height=320, showlegend=False)
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
-# 매우 안전한 자바스크립트 적용 (null 방어코드 추가)
+# 안전한 JS 포맷팅
 color_jscode = JsCode("""
 function(params) {
     if (!params.value) return {'textAlign': 'center', 'color': '#000'};
     var val = params.value;
-    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '채권') { return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '실물') { return {'color': '#ca8a04', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '리츠') { return {'color': '#059669', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '현금') { return {'color': '#475569', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '주식') return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'};
+    if (val === '채권') return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'};
+    if (val === '실물') return {'color': '#ca8a04', 'fontWeight': 'bold', 'textAlign': 'center'};
+    if (val === '리츠') return {'color': '#059669', 'fontWeight': 'bold', 'textAlign': 'center'};
+    if (val === '현금') return {'color': '#475569', 'fontWeight': 'bold', 'textAlign': 'center'};
     return {'textAlign': 'center', 'color': '#000000'};
 }
 """)
@@ -208,23 +197,35 @@ ma_color_jscode = JsCode("""
 function(params) {
     if (!params.value) return {'textAlign': 'center', 'color': '#64748b'};
     var val = params.value;
-    if (val === '상단') { return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '하단') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '상단') return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'};
+    if (val === '하단') return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'};
     return {'textAlign': 'center', 'color': '#64748b'};
 }
 """)
 
-# 안전한 숫자 포맷팅 JS
+chart_link = JsCode("""
+class ChartLinkRenderer {
+    init(params) {
+        this.eGui = document.createElement('div');
+        if (params.value && params.value !== '') {
+            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
+        } else {
+            this.eGui.innerHTML = '<span style="color: #475569;">-</span>';
+        }
+    }
+    getGui() { return this.eGui; }
+}
+""")
+
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
-# 헤더 및 시세 호출
+# 헤더
 header_col1, _ = st.columns([4, 1])
 with header_col1:
     st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
 do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
-
 if do_refresh:
     fetch_current_price.clear()
     st.session_state.fetch_status["done"] = False
@@ -246,11 +247,16 @@ else:
     st.markdown(f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
+# 연산 및 UI 렌더링
 grand_total = 0
 computed = {}
 
 for key, df in st.session_state.portfolio.items():
     df_calc = df.copy()
+    # 숫자형 변환 (안정성 강화)
+    df_calc["현재가"] = pd.to_numeric(df_calc["현재가"], errors='coerce').fillna(0).astype(int)
+    df_calc["보유수량"] = pd.to_numeric(df_calc["보유수량"], errors='coerce').fillna(0).astype(int)
+    
     df_calc["평가금액"] = df_calc["현재가"] * df_calc["보유수량"]
     total_eval = df_calc["평가금액"].sum()
     grand_total += total_eval
@@ -267,7 +273,6 @@ for key, df in st.session_state.portfolio.items():
         return "유지"
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
-    # 네이버 차트 링크를 순수 텍스트로 대체하여 브라우저 크래시 방지
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
@@ -280,6 +285,17 @@ for i, key in enumerate(["dc", "pension", "irp"]):
     with summary_cols[i + 1]:
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
+
+custom_css = {
+    ".ag-header-cell-label": {"justify-content": "center !important"},
+    ".ag-header-cell": {"text-align": "center !important"}
+}
+
+def clean_numeric(val):
+    if pd.isna(val): return 0
+    s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
+    try: return int(float(s))
+    except ValueError: return 0
 
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
@@ -301,90 +317,65 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        
-        # Selectbox 설정 안전화
-        gb.configure_column(
-            "이평선", 
-            editable=True, 
-            cellEditor="agSelectCellEditor", 
-            cellEditorParams={"values": ["상단", "하단", "-"]}, 
-            cellStyle=ma_color_jscode, 
-            width=120
-        )
-        
+        gb.configure_column("이평선", editable=True, cellEditor="agSelectCellEditor", cellEditorParams={"values": ["상단", "하단", "-"]}, cellStyle=ma_color_jscode, width=120)
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
-        
-        # 차트 렌더러 제거 후 기본 URL 텍스트로 표출 (크래시 유발 방지)
-        gb.configure_column("차트", width=150, editable=False, cellStyle={'textAlign': 'left', 'color': '#2563eb'})
+        gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
 
         gridOptions = gb.build()
 
-        try:
-            grid_response = AgGrid(
-                display_df,
-                gridOptions=gridOptions,
-                update_mode=GridUpdateMode.VALUE_CHANGED, 
-                allow_unsafe_jscode=True, 
-                theme='alpine', 
-                fit_columns_on_grid_load=True, 
-                key=f"grid_{key}"
-            )
+        grid_response = AgGrid(
+            display_df,
+            gridOptions=gridOptions,
+            update_mode=GridUpdateMode.VALUE_CHANGED, 
+            allow_unsafe_jscode=True, 
+            theme='alpine', 
+            custom_css=custom_css,
+            fit_columns_on_grid_load=True, 
+            key=f"grid_{key}"
+        )
 
-            edited_data = grid_response['data']
-            if edited_data is not None:
-                if isinstance(edited_data, dict):
-                    edited_df = pd.DataFrame(edited_data)
-                else:
-                    edited_df = edited_data
+        edited_data = grid_response['data']
+        if edited_data is not None:
+            edited_df = pd.DataFrame(edited_data) if isinstance(edited_data, dict) else edited_data
+            if not edited_df.empty:
+                
+                changed = False
+                # 완벽하게 안전한 데이터 매칭 (순서 변경이나 에러 발생 완벽 차단)
+                for i, orig_row in st.session_state.portfolio[key].iterrows():
+                    etf_name = orig_row["ETF명"]
+                    match_row = edited_df[edited_df["ETF명"] == etf_name]
                     
-                if not edited_df.empty:
-                    def clean_numeric(val):
-                        if pd.isna(val): return 0
-                        s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
-                        try:
-                            return float(s)
-                        except ValueError:
-                            return 0
-
-                    new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
-                    new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
-                    new_mas = edited_df["이평선"].values
-                    
-                    orig_prices = st.session_state.portfolio[key]["현재가"].values
-                    orig_amounts = st.session_state.portfolio[key]["보유수량"].values
-                    orig_mas = st.session_state.portfolio[key]["이평선"].values
-                    
-                    if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
-                        st.session_state.portfolio[key]["현재가"] = new_prices
-                        st.session_state.portfolio[key]["보유수량"] = new_amounts
+                    if not match_row.empty:
+                        e_row = match_row.iloc[0]
+                        new_p = clean_numeric(e_row["현재가"])
+                        new_a = clean_numeric(e_row["보유수량"])
+                        new_ma = str(e_row["이평선"])
                         
-                        updated_mas = []
-                        for idx, row in st.session_state.portfolio[key].iterrows():
-                            etf_name = row["ETF명"]
-                            new_val = new_mas[idx]
-                            updated_mas.append(new_val)
+                        if orig_row["현재가"] != new_p or orig_row["보유수량"] != new_a or str(orig_row["이평선"]) != new_ma:
+                            st.session_state.portfolio[key].at[i, "현재가"] = new_p
+                            st.session_state.portfolio[key].at[i, "보유수량"] = new_a
+                            st.session_state.portfolio[key].at[i, "이평선"] = new_ma
+                            changed = True
                             
-                            for other_k in st.session_state.portfolio.keys():
-                                mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
-                                st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
-                                
-                        st.session_state.portfolio[key]["이평선"] = updated_mas
-                        save_portfolio_to_file(st.session_state.portfolio)
-                        st.rerun()
-                        
-        except Exception as e:
-            st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
+                            # 동일 종목 이평선 전 계좌 자동 동기화
+                            if str(orig_row["이평선"]) != new_ma:
+                                for other_k in st.session_state.portfolio.keys():
+                                    mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
+                                    st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_ma
+                                    
+                if changed:
+                    save_portfolio_to_file(st.session_state.portfolio)
+                    st.rerun()
 
         st.write("") 
         chart_col, info_col = st.columns([1, 1.3]) 
-        
         with chart_col:
             st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
             render_donut(cat_totals, key)
             
         with info_col:
-            rule_html = """
+            st.markdown("""
             <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
                 <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
                 <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
@@ -394,5 +385,4 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                     <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
                 </ul>
             </div>
-            """
-            st.markdown(rule_html, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
