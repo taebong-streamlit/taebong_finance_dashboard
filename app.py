@@ -510,14 +510,16 @@ for key in [selected_key]:
     gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
-    # 차트 열: 클래스형 버튼 렌더러 적용
+    # 차트 열: 클래스형 버튼 렌더러 적용 (이름으로 등록해서 참조 - ag-grid-react가
+    # 인라인으로 넘긴 렌더러를 인식 못하고 무시하는 문제를 피하기 위함)
     gb.configure_column(
         "차트", width=95, editable=False,
-        cellRenderer=chart_button_renderer,
+        cellRenderer="chartButtonRenderer",
         cellStyle={'textAlign': 'center'}
     )
 
     gridOptions = gb.build()
+    gridOptions["components"] = {"chartButtonRenderer": chart_button_renderer}
 
     # 표 안 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
     custom_css = {
