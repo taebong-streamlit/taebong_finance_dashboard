@@ -161,6 +161,15 @@ function(params) {
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
+# 평가금액 = 현재가 x 보유수량을 같은 행 데이터만으로 실시간 계산 (엔터를 누르지 않아도 즉시 반영됨)
+eval_amount_getter = JsCode("""
+function(params) {
+    var price = Number(params.data.현재가) || 0;
+    var qty = Number(params.data.보유수량) || 0;
+    return (price * qty).toLocaleString() + ' 원';
+}
+""")
+
 # ==========================================
 # 2. 포트폴리오 기본 데이터
 # ==========================================
@@ -246,7 +255,7 @@ def _ensure_worksheet(sh, key):
         ws = sh.add_worksheet(title=key, rows=20, cols=len(SHEET_COLS))
     df = pd.DataFrame(DEFAULT_PORTFOLIO[key])
     ws.clear()
-    ws.update([SHEET_COLS] + df[SHEET_COLS].values.tolist())
+    ws.update(values=[SHEET_COLS] + df[SHEET_COLS].values.tolist())
     return df
 
 def load_portfolio_from_gsheet():
@@ -268,7 +277,9 @@ def save_portfolio_to_gsheet(portfolio_dict):
         ws = sh.worksheet(key)
         sub_df = df[SHEET_COLS].copy()
         ws.clear()
-        ws.update([SHEET_COLS] + sub_df.values.tolist())
+        result = ws.update(values=[SHEET_COLS] + sub_df.values.tolist())
+        if not result:
+            raise RuntimeError(f"'{key}' 시트 저장 응답이 비어있습니다.")
 
 # ==========================================
 # 2-2. 로컬 파일 저장
@@ -321,9 +332,10 @@ def save_portfolio(portfolio_dict, mode):
     if mode == "gsheet":
         try:
             save_portfolio_to_gsheet(portfolio_dict)
+            st.session_state["last_save_error"] = None
             return
         except Exception as e:
-            st.warning(f"⚠️ Google Sheets 저장 실패, 이번 변경분은 로컬 파일에 대신 저장합니다: {e}")
+            st.session_state["last_save_error"] = str(e)
     save_portfolio_to_file(portfolio_dict)
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
@@ -430,6 +442,9 @@ with col_badges:
         unsafe_allow_html=True,
     )
 
+if st.session_state.get("last_save_error"):
+    st.error(f"⚠️ 최근 수정사항이 Google Sheets에 저장되지 못했습니다 (로컬에만 임시 저장됨): {st.session_state['last_save_error']}")
+
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
 grand_total = 0
@@ -495,7 +510,7 @@ for key in [selected_key]:
     gb.configure_column("목표비율", width=95, editable=False)
     gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
-    gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("평가금액", width=140, editable=False, valueGetter=eval_amount_getter, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("현재비율", width=95, editable=False)
         
     gb.configure_column(
@@ -529,7 +544,7 @@ for key in [selected_key]:
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,  # 버튼 렌더러를 위해 활성화
             custom_css=custom_css,
-            key=f"grid_{key}"
+            key=f"grid_{key}_{st.session_state.get('data_version', 0)}"
         )
 
         edited_data = grid_response['data']
@@ -572,6 +587,7 @@ for key in [selected_key]:
                                         st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_ma
                 
                 if has_changes:
+                    st.session_state["data_version"] = st.session_state.get("data_version", 0) + 1
                     save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
                     st.rerun()
                         
