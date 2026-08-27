@@ -554,6 +554,7 @@ for key in [selected_key]:
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,  # 버튼 렌더러를 위해 활성화
             custom_css=custom_css,
+            height=442,  # 기본값(400)보다 한 행 분량(약 42px)만큼 더 크게
             key=f"grid_{key}_{st.session_state.get('data_version', 0)}"
         )
 
