@@ -6,7 +6,7 @@ import streamlit as st
 import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from st_aggrid.shared import JsCode  # JsCode 임포트 추가
+from st_aggrid.shared import JsCode  # JsCode 임포트 필수
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -74,13 +74,17 @@ st.markdown(
 )
 
 # ==========================================
-# 1-2. AgGrid 렌더러 안전 JS 설정 (클래스형)
+# 1-2. AgGrid 렌더러 안전 JS 설정 (차트 버튼)
 # ==========================================
 chart_button_jscode = JsCode("""
 class BtnCellRenderer {
     init(params) {
+        // 컨테이너를 Flex로 설정하여 완벽한 중앙 정렬
         this.eGui = document.createElement('div');
-        this.eGui.style.textAlign = 'center';
+        this.eGui.style.display = 'flex';
+        this.eGui.style.alignItems = 'center';
+        this.eGui.style.justifyContent = 'center';
+        this.eGui.style.height = '100%'; 
         this.eGui.style.width = '100%';
         
         if (params.value && params.value !== '') {
@@ -89,20 +93,37 @@ class BtnCellRenderer {
             this.eButton.href = params.value;
             this.eButton.target = '_blank';
             
-            this.eButton.style.display = 'inline-block';
-            this.eButton.style.padding = '4px 12px';
-            this.eButton.style.marginTop = '4px';
-            this.eButton.style.backgroundColor = '#2563eb';
+            // 버튼 디자인 세련되게 다듬기
+            this.eButton.style.display = 'inline-flex';
+            this.eButton.style.alignItems = 'center';
+            this.eButton.style.justifyContent = 'center';
+            this.eButton.style.padding = '4px 8px';
+            this.eButton.style.backgroundColor = '#3b82f6';
             this.eButton.style.color = '#ffffff';
             this.eButton.style.textDecoration = 'none';
-            this.eButton.style.borderRadius = '6px';
-            this.eButton.style.fontWeight = 'bold';
-            this.eButton.style.fontSize = '12px';
+            this.eButton.style.borderRadius = '4px';
+            this.eButton.style.fontWeight = '600';
+            this.eButton.style.fontSize = '11px';
+            this.eButton.style.lineHeight = '1';
             this.eButton.style.cursor = 'pointer';
+            this.eButton.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+            this.eButton.style.transition = 'all 0.15s ease-in-out';
             
-            // 호버 효과
-            this.eButton.addEventListener('mouseenter', () => { this.eButton.style.backgroundColor = '#1d4ed8'; });
-            this.eButton.addEventListener('mouseleave', () => { this.eButton.style.backgroundColor = '#2563eb'; });
+            // 호버 및 클릭(Press) 애니메이션 효과
+            this.eButton.addEventListener('mouseenter', () => { 
+                this.eButton.style.backgroundColor = '#1d4ed8'; 
+                this.eButton.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+            });
+            this.eButton.addEventListener('mouseleave', () => { 
+                this.eButton.style.backgroundColor = '#3b82f6'; 
+                this.eButton.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+            });
+            this.eButton.addEventListener('mousedown', () => {
+                this.eButton.style.transform = 'scale(0.92)';
+            });
+            this.eButton.addEventListener('mouseup', () => {
+                this.eButton.style.transform = 'scale(1)';
+            });
             
             this.eGui.appendChild(this.eButton);
         }
@@ -337,6 +358,7 @@ def render_donut(cat_totals: dict, key: str):
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
+
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
 with header_col1:
@@ -458,7 +480,7 @@ for key in [selected_key]:
     gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
     
-    # 클래스형 커스텀 렌더러 적용
+    # 세련된 클래스형 커스텀 렌더러 적용
     gb.configure_column("차트", width=95, editable=False, cellRenderer=chart_button_jscode)
 
     gridOptions = gb.build()
