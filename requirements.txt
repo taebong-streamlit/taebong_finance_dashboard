@@ -6,3 +6,5 @@ beautifulsoup4
 plotly
 lxml
 html5lib
+gspread
+google-auth
