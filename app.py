@@ -1,14 +1,12 @@
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 연동
-- 이평선 셀 배경 음영 제거 및 글자 색상(상단:빨강, 하단:파랑)만 표시
-필요 패키지: streamlit==1.35.0 pandas requests beautifulsoup4 plotly lxml html5lib streamlit-aggrid
-실행: streamlit run app.py
+- 이평선 수정 시 동일 종목 전 계좌 자동 연동
+- AgGrid 프론트엔드 충돌 원인(Custom CSS 및 불안정 JS) 완전 제거본
 """
 
 import os
 import json
-import time
 import requests
 import pandas as pd
 import streamlit as st
@@ -31,36 +29,13 @@ DATA_FILE = "portfolio_data.json"
 st.markdown(
     """
     <style>
-        /* 전체 배경을 어두운 네이비톤으로 유지 */
-        .stApp {
-            background-color: #0f172a;
-            color: #f8fafc;
-        }
-        
-        /* 상단 여백 확보 (제목 짤림 방지) */
-        .block-container { 
-            padding-top: 3.5rem !important; 
-            padding-bottom: 1rem; 
-            max-width: 95%; 
-        }
-        
-        /* 새로고침 버튼 디자인 */
+        .stApp { background-color: #0f172a; color: #f8fafc; }
+        .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem; max-width: 95%; }
         div[data-testid="stButton"] button {
-            background-color: #1e293b !important;
-            border: 1px solid #475569 !important;
+            background-color: #1e293b !important; border: 1px solid #475569 !important;
         }
-        div[data-testid="stButton"] button p {
-            color: #ffffff !important; 
-            font-weight: 700 !important;
-        }
-        div[data-testid="stButton"] button:hover {
-            border-color: #60a5fa !important;
-        }
-        div[data-testid="stButton"] button:hover p {
-            color: #60a5fa !important; 
-        }
-        
-        /* 요약 카드 디자인 */
+        div[data-testid="stButton"] button p { color: #ffffff !important; font-weight: 700 !important; }
+        div[data-testid="stButton"] button:hover { border-color: #60a5fa !important; }
         .summary-card {
             background:#1e293b; padding:12px 20px; border-radius:14px;
             box-shadow:0 4px 10px rgba(0,0,0,0.2); border:1px solid #334155;
@@ -68,24 +43,19 @@ st.markdown(
         }
         .summary-card label { font-size:1.1rem; color:#94a3b8; font-weight:700; }
         .summary-card .value { font-size:1.35rem; font-weight:800; margin-top:4px; color:#f8fafc; }
-        
         .card-dc { border-left-color:#3b82f6; } 
         .card-pension { border-left-color:#10b981; } 
         .card-irp { border-left-color:#8b5cf6; } 
-        
-        .status-badge {
-            font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600;
-        }
+        .status-badge { font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600; }
         .status-loading { background:#78350f; color:#fef3c7; }
         .status-success { background:#064e3b; color:#d1fae5; }
-        .status-manual { background:#7f1d1d; color:#fee2e2; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ==========================================
-# 2. 포트폴리오 기본 데이터 (파일 입출력 연동)
+# 2. 포트폴리오 기본 데이터
 # ==========================================
 DEFAULT_PORTFOLIO = {
     "dc": [
@@ -161,26 +131,13 @@ def save_portfolio_to_file(portfolio_dict):
 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
-CATEGORY_COLORS = {
-    "주식": "#60a5fa", 
-    "채권": "#fb923c", 
-    "실물": "#facc15", 
-    "리츠": "#34d399", 
-    "현금": "#cbd5e1", 
-}
+CATEGORY_COLORS = {"주식": "#60a5fa", "채권": "#fb923c", "실물": "#facc15", "리츠": "#34d399", "현금": "#cbd5e1"}
 
-# ==========================================
-# 3. 세션 상태 초기화
-# ==========================================
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = load_portfolio_from_file()
-
 if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
-# ==========================================
-# 4. 실시간 시세 스크래핑
-# ==========================================
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_current_price(code: str):
     if not code: return 1
@@ -209,9 +166,6 @@ def get_unique_codes():
         codes.update(c for c in df["코드"].tolist() if c)
     return sorted(codes)
 
-# ==========================================
-# 5. 차트 렌더링 함수 & AgGrid 자바스크립트 코드
-# ==========================================
 def render_donut(cat_totals: dict, key: str):
     labels = [k for k, v in cat_totals.items() if v > 0]
     values = [v for v in cat_totals.values() if v > 0]
@@ -236,8 +190,10 @@ def render_donut(cat_totals: dict, key: str):
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
+# 매우 안전한 자바스크립트 적용 (null 방어코드 추가)
 color_jscode = JsCode("""
 function(params) {
+    if (!params.value) return {'textAlign': 'center', 'color': '#000'};
     var val = params.value;
     if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
     if (val === '채권') { return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'}; }
@@ -248,46 +204,26 @@ function(params) {
 }
 """)
 
-# 이평선(상단: 빨간 글씨, 하단: 파란 글씨) - 배경 음영 제거
 ma_color_jscode = JsCode("""
 function(params) {
+    if (!params.value) return {'textAlign': 'center', 'color': '#64748b'};
     var val = params.value;
-    if (val === '상단') {
-        return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'};
-    } else if (val === '하단') {
-        return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'};
-    }
+    if (val === '상단') { return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '하단') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
     return {'textAlign': 'center', 'color': '#64748b'};
 }
 """)
 
-chart_link = JsCode("""
-class ChartLinkRenderer {
-    init(params) {
-        this.eGui = document.createElement('div');
-        if (params.value && params.value !== '') {
-            this.eGui.innerHTML = '<a href="' + params.value + '" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:bold;">📊 열기</a>';
-        } else {
-            this.eGui.innerHTML = '<span style="color: #475569;">-</span>';
-        }
-    }
-    getGui() {
-        return this.eGui;
-    }
-}
-""")
+# 안전한 숫자 포맷팅 JS
+currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
+amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
-currency_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 원'; }")
-amount_fmt = JsCode("function(params) { return Number(params.value).toLocaleString() + ' 주'; }")
-
-# ==========================================
-# 6. 헤더 및 시세 호출
-# ==========================================
-header_col1, header_col2 = st.columns([4, 1])
+# 헤더 및 시세 호출
+header_col1, _ = st.columns([4, 1])
 with header_col1:
     st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
-do_refresh = st.button("🔄 실시간 시세 강제 새로고침", width="content")
+do_refresh = st.button("🔄 실시간 시세 강제 새로고침", use_container_width=False)
 
 if do_refresh:
     fetch_current_price.clear()
@@ -310,9 +246,6 @@ else:
     st.markdown(f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
-# ==========================================
-# 7. 통합 로직 및 UI 렌더링
-# ==========================================
 grand_total = 0
 computed = {}
 
@@ -334,6 +267,7 @@ for key, df in st.session_state.portfolio.items():
         return "유지"
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
+    # 네이버 차트 링크를 순수 텍스트로 대체하여 브라우저 크래시 방지
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
@@ -347,106 +281,100 @@ for i, key in enumerate(["dc", "pension", "irp"]):
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
-
-custom_css = {
-    ".ag-header-cell-label": {"justify-content": "center !important"},
-    ".ag-header-cell": {"text-align": "center !important"}
-}
-
-
 tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
         
         display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
-        
         display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
         display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
         display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
-        
         gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
-        
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
         gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
         gb.configure_column("목표비율", width=100, editable=False)
-        
         gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         
+        # Selectbox 설정 안전화
         gb.configure_column(
             "이평선", 
             editable=True, 
             cellEditor="agSelectCellEditor", 
-            cellEditorParams={"values": ["상단", "하단"]}, 
+            cellEditorParams={"values": ["상단", "하단", "-"]}, 
             cellStyle=ma_color_jscode, 
             width=120
         )
         
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
-        gb.configure_column("차트", cellRenderer=chart_link, width=100, editable=False)
+        
+        # 차트 렌더러 제거 후 기본 URL 텍스트로 표출 (크래시 유발 방지)
+        gb.configure_column("차트", width=150, editable=False, cellStyle={'textAlign': 'left', 'color': '#2563eb'})
 
         gridOptions = gb.build()
 
-        grid_response = AgGrid(
-            display_df,
-            gridOptions=gridOptions,
-            update_mode=GridUpdateMode.VALUE_CHANGED, 
-            allow_unsafe_jscode=True, 
-            theme='alpine', 
-            custom_css=custom_css,
-            fit_columns_on_grid_load=True, 
-            key=f"grid_{key}"
-        )
+        try:
+            grid_response = AgGrid(
+                display_df,
+                gridOptions=gridOptions,
+                update_mode=GridUpdateMode.VALUE_CHANGED, 
+                allow_unsafe_jscode=True, 
+                theme='alpine', 
+                fit_columns_on_grid_load=True, 
+                key=f"grid_{key}"
+            )
 
-        edited_data = grid_response['data']
-        if edited_data is not None:
-            if isinstance(edited_data, dict):
-                edited_df = pd.DataFrame(edited_data)
-            else:
-                edited_df = edited_data
-                
-            if not edited_df.empty:
-                def clean_numeric(val):
-                    if pd.isna(val): return 0
-                    s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
-                    try:
-                        return float(s)
-                    except ValueError:
-                        return 0
-
-                new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
-                new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
-                new_mas = edited_df["이평선"].values
-                
-                orig_prices = st.session_state.portfolio[key]["현재가"].values
-                orig_amounts = st.session_state.portfolio[key]["보유수량"].values
-                orig_mas = st.session_state.portfolio[key]["이평선"].values
-                
-                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
-                    st.session_state.portfolio[key]["현재가"] = new_prices
-                    st.session_state.portfolio[key]["보유수량"] = new_amounts
+            edited_data = grid_response['data']
+            if edited_data is not None:
+                if isinstance(edited_data, dict):
+                    edited_df = pd.DataFrame(edited_data)
+                else:
+                    edited_df = edited_data
                     
-                    updated_mas = []
-                    for idx, row in st.session_state.portfolio[key].iterrows():
-                        etf_name = row["ETF명"]
-                        new_val = new_mas[idx]
-                        updated_mas.append(new_val)
+                if not edited_df.empty:
+                    def clean_numeric(val):
+                        if pd.isna(val): return 0
+                        s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
+                        try:
+                            return float(s)
+                        except ValueError:
+                            return 0
+
+                    new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
+                    new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
+                    new_mas = edited_df["이평선"].values
+                    
+                    orig_prices = st.session_state.portfolio[key]["현재가"].values
+                    orig_amounts = st.session_state.portfolio[key]["보유수량"].values
+                    orig_mas = st.session_state.portfolio[key]["이평선"].values
+                    
+                    if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
+                        st.session_state.portfolio[key]["현재가"] = new_prices
+                        st.session_state.portfolio[key]["보유수량"] = new_amounts
                         
-                        for other_k in st.session_state.portfolio.keys():
-                            mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
-                            st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
+                        updated_mas = []
+                        for idx, row in st.session_state.portfolio[key].iterrows():
+                            etf_name = row["ETF명"]
+                            new_val = new_mas[idx]
+                            updated_mas.append(new_val)
                             
-                    st.session_state.portfolio[key]["이평선"] = updated_mas
-                    
-                    save_portfolio_to_file(st.session_state.portfolio)
-                    st.rerun()
+                            for other_k in st.session_state.portfolio.keys():
+                                mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
+                                st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
+                                
+                        st.session_state.portfolio[key]["이평선"] = updated_mas
+                        save_portfolio_to_file(st.session_state.portfolio)
+                        st.rerun()
+                        
+        except Exception as e:
+            st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
 
         st.write("") 
         chart_col, info_col = st.columns([1, 1.3]) 
