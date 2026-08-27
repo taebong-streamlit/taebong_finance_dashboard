@@ -341,36 +341,6 @@ function(params) {
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
-# 네이버 차트 바로가기 버튼 렌더러 (링크 텍스트 대신 클릭 가능한 버튼 형태로 표시)
-# 문자열을 반환하면 innerHTML이 아니라 그냥 텍스트로 찍히는 구버전 동작 때문에,
-# document.createElement로 실제 DOM 엘리먼트를 직접 만들어서 반환한다.
-chart_button_renderer = JsCode("""
-function(params) {
-    if (!params.value) {
-        return document.createTextNode('');
-    }
-    var link = document.createElement('a');
-    link.href = params.value;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.style.textDecoration = 'none';
-
-    var badge = document.createElement('span');
-    badge.innerText = '📊 차트';
-    badge.style.display = 'inline-block';
-    badge.style.backgroundColor = '#2563eb';
-    badge.style.color = '#ffffff';
-    badge.style.padding = '3px 12px';
-    badge.style.borderRadius = '6px';
-    badge.style.fontSize = '0.82rem';
-    badge.style.fontWeight = '700';
-    badge.style.cursor = 'pointer';
-
-    link.appendChild(badge);
-    return link;
-}
-""")
-
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
 with header_col1:
@@ -484,11 +454,11 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
-        # 차트 열: 링크를 클릭 가능한 버튼으로 렌더링
+        # 차트 열: 커스텀 JS 렌더러(버튼)는 이 grid 버전에서 크래시를 유발해 제거하고,
+        # 안정적인 일반 텍스트(클릭은 안 되지만 절대 깨지지 않음)로 표시한다.
         gb.configure_column(
             "차트", width=95, editable=False,
-            cellRenderer=chart_button_renderer,
-            cellStyle={'textAlign': 'center'}
+            cellStyle={'textAlign': 'left', 'color': '#60a5fa'}
         )
 
         gridOptions = gb.build()
@@ -554,6 +524,21 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                         
         except Exception as e:
             st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
+
+        # 종목 차트 바로가기: AgGrid 내부 커스텀 렌더러는 이 버전에서 불안정해
+        # 순수 Streamlit 위젯(selectbox + link_button)으로 안전하게 구현한다.
+        chart_targets = df_calc[df_calc["코드"] != ""][["ETF명", "차트"]].reset_index(drop=True)
+        pick_col, link_col = st.columns([3, 1])
+        with pick_col:
+            picked_name = st.selectbox(
+                "📊 차트 볼 종목 선택",
+                chart_targets["ETF명"],
+                key=f"chart_pick_{key}",
+                label_visibility="collapsed",
+            )
+        with link_col:
+            picked_url = chart_targets.loc[chart_targets["ETF명"] == picked_name, "차트"].values[0]
+            st.link_button("📊 네이버 차트 열기", picked_url, use_container_width=True)
 
         st.write("") 
         chart_col, info_col = st.columns([1, 1.3]) 
