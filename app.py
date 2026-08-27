@@ -133,6 +133,35 @@ class BtnCellRenderer {
 """)
 
 # ==========================================
+# 1-3. 표 색상 강조 / 단위 포맷 JS (차트 버튼과 무관한 별도 렌더러)
+# ==========================================
+color_jscode = JsCode("""
+function(params) {
+    if (!params.value) return {'textAlign': 'center', 'color': '#000'};
+    var val = params.value;
+    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '채권') { return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '실물') { return {'color': '#ca8a04', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '리츠') { return {'color': '#059669', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '현금') { return {'color': '#475569', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    return {'textAlign': 'center', 'color': '#000000'};
+}
+""")
+
+ma_color_jscode = JsCode("""
+function(params) {
+    if (!params.value) return {'textAlign': 'center', 'color': '#64748b'};
+    var val = params.value;
+    if (val === '상단') { return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    if (val === '하단') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
+    return {'textAlign': 'center', 'color': '#64748b'};
+}
+""")
+
+currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
+amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
+
+# ==========================================
 # 2. 포트폴리오 기본 데이터
 # ==========================================
 DEFAULT_PORTFOLIO = {
@@ -461,11 +490,11 @@ for key in [selected_key]:
     gb = GridOptionsBuilder.from_dataframe(display_df)
     gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'}, resizable=True)
     
-    gb.configure_column("구분", width=80, editable=False)
+    gb.configure_column("구분", cellStyle=color_jscode, width=80, editable=False)
     gb.configure_column("ETF명", width=300, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
     gb.configure_column("목표비율", width=95, editable=False)
-    gb.configure_column("현재가", editable=True, type=["numericColumn"], width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
-    gb.configure_column("보유수량", editable=True, type=["numericColumn"], width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("현재비율", width=95, editable=False)
         
@@ -474,6 +503,7 @@ for key in [selected_key]:
         editable=True, 
         cellEditor="agSelectCellEditor", 
         cellEditorParams={"values": ["상단", "하단", "-"]}, 
+        cellStyle=ma_color_jscode,
         width=95
     )
         
@@ -485,6 +515,11 @@ for key in [selected_key]:
 
     gridOptions = gb.build()
 
+    # 표 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
+    custom_css = {
+        ".ag-header-cell-label": {"justify-content": "center"},
+    }
+
     try:
         grid_response = AgGrid(
             display_df,
@@ -493,6 +528,7 @@ for key in [selected_key]:
             theme='alpine', 
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,  # 버튼 렌더러를 위해 활성화
+            custom_css=custom_css,
             key=f"grid_{key}"
         )
 
