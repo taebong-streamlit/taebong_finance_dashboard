@@ -342,13 +342,32 @@ currency_fmt = JsCode("function(params) { return params.value != null ? Number(p
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
 # 네이버 차트 바로가기 버튼 렌더러 (링크 텍스트 대신 클릭 가능한 버튼 형태로 표시)
+# 문자열을 반환하면 innerHTML이 아니라 그냥 텍스트로 찍히는 구버전 동작 때문에,
+# document.createElement로 실제 DOM 엘리먼트를 직접 만들어서 반환한다.
 chart_button_renderer = JsCode("""
 function(params) {
-    if (!params.value) { return ''; }
-    return '<a href="' + params.value + '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">' +
-           '<span style="display:inline-block; background-color:#2563eb; color:#ffffff; ' +
-           'padding:3px 12px; border-radius:6px; font-size:0.82rem; font-weight:700; cursor:pointer;">' +
-           '📊 차트</span></a>';
+    if (!params.value) {
+        return document.createTextNode('');
+    }
+    var link = document.createElement('a');
+    link.href = params.value;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.textDecoration = 'none';
+
+    var badge = document.createElement('span');
+    badge.innerText = '📊 차트';
+    badge.style.display = 'inline-block';
+    badge.style.backgroundColor = '#2563eb';
+    badge.style.color = '#ffffff';
+    badge.style.padding = '3px 12px';
+    badge.style.borderRadius = '6px';
+    badge.style.fontSize = '0.82rem';
+    badge.style.fontWeight = '700';
+    badge.style.cursor = 'pointer';
+
+    link.appendChild(badge);
+    return link;
 }
 """)
 
