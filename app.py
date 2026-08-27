@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from bs4 import BeautifulSoup
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from st_aggrid.shared import JsCode  # JsCode 임포트 필수
 import gspread
 from google.oauth2.service_account import Credentials
@@ -447,7 +447,12 @@ if st.session_state.get("last_save_error"):
 elif st.session_state.get("last_save_ok"):
     st.success(f"✅ {st.session_state['last_save_ok']}")
 elif st.session_state.get("last_no_change_debug"):
-    st.info(f"ℹ️ {st.session_state['last_no_change_debug']} (수정한 값이 기존 값과 같거나, 편집이 셀에 반영되기 전에 다른 동작이 발생했을 수 있습니다)")
+    debug_text = st.session_state["last_no_change_debug"]
+    summary, _, detail = debug_text.partition(" | ")
+    st.info(f"ℹ️ {summary} (수정한 값이 기존 값과 같거나, 편집이 셀에 반영되기 전에 다른 동작이 발생했을 수 있습니다)")
+    if detail:
+        with st.expander("비교 상세 로그 보기"):
+            st.code(detail.replace(" / ", "\n"))
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
@@ -543,7 +548,8 @@ for key in [selected_key]:
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
-            update_mode=GridUpdateMode.VALUE_CHANGED, 
+            update_mode=GridUpdateMode.VALUE_CHANGED | GridUpdateMode.MODEL_CHANGED,
+            data_return_mode=DataReturnMode.AS_INPUT,
             theme='alpine', 
             fit_columns_on_grid_load=False,
             allow_unsafe_jscode=True,  # 버튼 렌더러를 위해 활성화
@@ -566,6 +572,7 @@ for key in [selected_key]:
                     except ValueError: return 0
 
                 has_changes = False
+                compare_log = []
                 
                 for idx, row in edited_df.iterrows():
                     new_price = int(clean_numeric(row["현재가"]))
@@ -575,6 +582,10 @@ for key in [selected_key]:
                     orig_price = st.session_state.portfolio[key].at[idx, "현재가"]
                     orig_amount = st.session_state.portfolio[key].at[idx, "보유수량"]
                     orig_ma = st.session_state.portfolio[key].at[idx, "이평선"]
+
+                    compare_log.append(
+                        f"행{idx}: 보유수량 {orig_amount}→{new_amount}, 현재가 {orig_price}→{new_price}, 이평선 {orig_ma}→{new_ma}"
+                    )
                     
                     if new_price != orig_price or new_amount != orig_amount or new_ma != orig_ma:
                         has_changes = True
@@ -602,7 +613,8 @@ for key in [selected_key]:
                     st.session_state["last_save_ok"] = None
                     st.session_state["last_save_error"] = None
                     st.session_state["last_no_change_debug"] = (
-                        f"편집 이벤트는 감지됐지만 값 변화가 없다고 판단됨 (계좌: {ACCOUNT_LABELS[key]})"
+                        f"편집 이벤트는 감지됐지만 값 변화가 없다고 판단됨 (계좌: {ACCOUNT_LABELS[key]}) | "
+                        + " / ".join(compare_log)
                     )
                         
     except Exception as e:
