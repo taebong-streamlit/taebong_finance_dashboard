@@ -561,8 +561,18 @@ for key in [selected_key]:
         if edited_data is not None:
             if isinstance(edited_data, dict):
                 edited_df = pd.DataFrame(edited_data)
+                # dict 형태({"컬럼": {"0": 값, "1": 값, ...}})로 오면 인덱스가 문자열로 잡히므로
+                # 원래 세션 데이터와 같은 정수 인덱스로 맞춰준다.
+                try:
+                    edited_df.index = edited_df.index.astype(int)
+                except (ValueError, TypeError):
+                    edited_df = edited_df.reset_index(drop=True)
+            elif isinstance(edited_data, list):
+                edited_df = pd.DataFrame(edited_data)
             else:
                 edited_df = edited_data
+                if hasattr(edited_df, "reset_index"):
+                    edited_df = edited_df.reset_index(drop=True)
                     
             if not edited_df.empty:
                 def clean_numeric(val):
