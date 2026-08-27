@@ -1,10 +1,12 @@
+
+App · PY
 """
 연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
 - 네이버 금융 실시간 시세 연동
 - 이평선 수정 시 동일 종목 전 계좌 자동 연동
 - AgGrid 프론트엔드 충돌 원인(Custom CSS 및 불안정 JS) 완전 제거본
 """
-
+ 
 import os
 import json
 import requests
@@ -16,15 +18,15 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
 import gspread
 from google.oauth2.service_account import Credentials
-
+ 
 # ==========================================
 # 0. 페이지 기본 설정 및 파일 저장 경로
 # ==========================================
 st.set_page_config(page_title="태봉의 연금자산 관리", page_icon="📈", layout="wide")
-
+ 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 DATA_FILE = "portfolio_data.json"
-
+ 
 # ==========================================
 # 1. 스타일 세팅
 # ==========================================
@@ -35,8 +37,9 @@ st.markdown(
         .block-container { padding-top: 3.5rem !important; padding-bottom: 1rem; max-width: 95%; }
         div[data-testid="stButton"] button {
             background-color: #1e293b !important; border: 1px solid #475569 !important;
+            padding: 2px 10px !important; font-size: 0.75rem !important; min-height: 1.8rem !important;
         }
-        div[data-testid="stButton"] button p { color: #ffffff !important; font-weight: 700 !important; }
+        div[data-testid="stButton"] button p { color: #ffffff !important; font-weight: 700 !important; font-size: 0.75rem !important; }
         div[data-testid="stButton"] button:hover { border-color: #60a5fa !important; }
         .summary-card {
             background:#1e293b; padding:12px 20px; border-radius:14px;
@@ -48,14 +51,14 @@ st.markdown(
         .card-dc { border-left-color:#3b82f6; } 
         .card-pension { border-left-color:#10b981; } 
         .card-irp { border-left-color:#8b5cf6; } 
-        .status-badge { font-size:0.85rem; padding:6px 14px; border-radius:20px; font-weight:600; }
+        .status-badge { font-size:0.68rem; padding:3px 10px; border-radius:12px; font-weight:600; white-space:nowrap; display:inline-block; }
         .status-loading { background:#78350f; color:#fef3c7; }
         .status-success { background:#064e3b; color:#d1fae5; }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
+ 
 # ==========================================
 # 2. 포트폴리오 기본 데이터
 # ==========================================
@@ -94,20 +97,20 @@ DEFAULT_PORTFOLIO = {
         {"구분": "현금", "ETF명": "원화 현금", "코드": "", "목표비율": 0.00, "보유수량": 7325, "이평선": "-"},
     ],
 }
-
+ 
 SHEET_COLS = ["구분", "ETF명", "코드", "목표비율", "보유수량", "이평선"]
-
+ 
 # ==========================================
 # 2-1. Google Sheets 연동 (secrets가 있으면 사용, 없으면 로컬 파일로 자동 폴백)
 # ==========================================
 import pathlib
-
+ 
 _SECRETS_PATHS = [
     pathlib.Path(".streamlit/secrets.toml"),
     pathlib.Path.home() / ".streamlit" / "secrets.toml",
 ]
 _secrets_file_exists = any(p.exists() for p in _SECRETS_PATHS)
-
+ 
 if _secrets_file_exists:
     try:
         GSHEET_ENABLED = "gcp_service_account" in st.secrets and "gsheet_url" in st.secrets
@@ -118,8 +121,8 @@ else:
     # (st.secrets는 파일이 없을 때 내부적으로 화면에 에러 박스를 한 번 띄운 뒤 예외를 던지므로,
     #  단순히 try/except로 감싸는 것만으로는 그 화면 노출을 막을 수 없다.)
     GSHEET_ENABLED = False
-
-
+ 
+ 
 @st.cache_resource(show_spinner=False)
 def get_gsheet():
     creds = Credentials.from_service_account_info(
@@ -128,8 +131,8 @@ def get_gsheet():
     )
     gc = gspread.authorize(creds)
     return gc.open_by_url(st.secrets["gsheet_url"])
-
-
+ 
+ 
 def _worksheet_to_df(ws, key):
     records = ws.get_all_records()
     if not records:
@@ -139,8 +142,8 @@ def _worksheet_to_df(ws, key):
     df["목표비율"] = df["목표비율"].astype(float)
     df["보유수량"] = df["보유수량"].astype(int)
     return df
-
-
+ 
+ 
 def _ensure_worksheet(sh, key):
     """해당 계좌 탭이 없으면 기본 데이터로 새로 만든다."""
     try:
@@ -151,8 +154,8 @@ def _ensure_worksheet(sh, key):
     ws.clear()
     ws.update([SHEET_COLS] + df[SHEET_COLS].values.tolist())
     return df
-
-
+ 
+ 
 def load_portfolio_from_gsheet():
     sh = get_gsheet()
     portfolio = {}
@@ -165,8 +168,8 @@ def load_portfolio_from_gsheet():
         df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
         portfolio[key] = df
     return portfolio
-
-
+ 
+ 
 def save_portfolio_to_gsheet(portfolio_dict):
     sh = get_gsheet()
     for key, df in portfolio_dict.items():
@@ -174,8 +177,8 @@ def save_portfolio_to_gsheet(portfolio_dict):
         sub_df = df[SHEET_COLS].copy()
         ws.clear()
         ws.update([SHEET_COLS] + sub_df.values.tolist())
-
-
+ 
+ 
 # ==========================================
 # 2-2. 로컬 파일 저장 (Google Sheets 미설정 시 폴백용)
 # ==========================================
@@ -203,7 +206,7 @@ def load_portfolio_from_file():
         portfolio[key] = df
     save_portfolio_to_file(portfolio)
     return portfolio
-
+ 
 def save_portfolio_to_file(portfolio_dict):
     try:
         data_to_save = {}
@@ -214,8 +217,8 @@ def save_portfolio_to_file(portfolio_dict):
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
     except Exception:
         pass
-
-
+ 
+ 
 # ==========================================
 # 2-3. 저장소 통합 인터페이스 (Google Sheets 우선, 실패 시 로컬 파일로 자동 전환)
 # ==========================================
@@ -226,8 +229,8 @@ def load_portfolio():
         except Exception as e:
             st.warning(f"⚠️ Google Sheets 연결 실패로 로컬 저장 방식으로 전환합니다: {e}")
     return load_portfolio_from_file(), "file"
-
-
+ 
+ 
 def save_portfolio(portfolio_dict, mode):
     if mode == "gsheet":
         try:
@@ -236,16 +239,16 @@ def save_portfolio(portfolio_dict, mode):
         except Exception as e:
             st.warning(f"⚠️ Google Sheets 저장 실패, 이번 변경분은 로컬 파일에 대신 저장합니다: {e}")
     save_portfolio_to_file(portfolio_dict)
-
+ 
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
 CATEGORY_COLORS = {"주식": "#60a5fa", "채권": "#fb923c", "실물": "#facc15", "리츠": "#34d399", "현금": "#cbd5e1"}
-
+ 
 if "portfolio" not in st.session_state:
     st.session_state.portfolio, st.session_state.storage_mode = load_portfolio()
 if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
-
+ 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_current_price(code: str):
     if not code: return 1
@@ -259,7 +262,7 @@ def fetch_current_price(code: str):
     except Exception:
         pass
     return None
-
+ 
 def fetch_all_prices(codes: list[str]):
     prices, success = {}, 0
     for code in codes:
@@ -267,13 +270,13 @@ def fetch_all_prices(codes: list[str]):
         prices[code] = p
         if p is not None: success += 1
     return prices, success
-
+ 
 def get_unique_codes():
     codes = set()
     for df in st.session_state.portfolio.values():
         codes.update(c for c in df["코드"].tolist() if c)
     return sorted(codes)
-
+ 
 def render_donut(cat_totals: dict, key: str):
     labels = [k for k, v in cat_totals.items() if v > 0]
     values = [v for v in cat_totals.values() if v > 0]
@@ -297,7 +300,7 @@ def render_donut(cat_totals: dict, key: str):
         showlegend=False 
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
-
+ 
 # 매우 안전한 자바스크립트 적용 (null 방어코드 추가)
 color_jscode = JsCode("""
 function(params) {
@@ -311,7 +314,7 @@ function(params) {
     return {'textAlign': 'center', 'color': '#000000'};
 }
 """)
-
+ 
 ma_color_jscode = JsCode("""
 function(params) {
     if (!params.value) return {'textAlign': 'center', 'color': '#64748b'};
@@ -321,11 +324,11 @@ function(params) {
     return {'textAlign': 'center', 'color': '#64748b'};
 }
 """)
-
+ 
 # 안전한 숫자 포맷팅 JS
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
-
+ 
 # 네이버 차트 바로가기 버튼 렌더러 (링크 텍스트 대신 클릭 가능한 버튼 형태로 표시)
 chart_button_renderer = JsCode("""
 function(params) {
@@ -336,25 +339,27 @@ function(params) {
            '📊 차트</span></a>';
 }
 """)
-
+ 
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
 with header_col1:
     st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
-
+ 
 storage_badge = (
-    '<span class="status-badge status-success">☁️ Google Sheets 연동됨 (영구 저장)</span>'
+    '<span class="status-badge status-success">☁️ Sheets 연동됨</span>'
     if st.session_state.storage_mode == "gsheet"
-    else '<span class="status-badge status-loading">💾 로컬 저장 모드 (재배포 시 초기화될 수 있음)</span>'
+    else '<span class="status-badge status-loading">💾 로컬 저장 모드</span>'
 )
-st.markdown(storage_badge, unsafe_allow_html=True)
-
-do_refresh = st.button("🔄 실시간 시세 강제 새로고침", use_container_width=False)
-
+ 
+col_btn, col_storage, col_status = st.columns([1.4, 1.1, 1.5], gap="small")
+ 
+with col_btn:
+    do_refresh = st.button("🔄 시세 새로고침", use_container_width=False)
+ 
 if do_refresh:
     fetch_current_price.clear()
     st.session_state.fetch_status["done"] = False
-
+ 
 if not st.session_state.fetch_status["done"] or do_refresh:
     codes = get_unique_codes()
     with st.spinner("실시간 시세를 불러오는 중입니다..."):
@@ -362,19 +367,26 @@ if not st.session_state.fetch_status["done"] or do_refresh:
         for key, df in st.session_state.portfolio.items():
             df["현재가"] = df.apply(lambda r: prices.get(r["코드"], r["현재가"]) if r["코드"] else 1, axis=1)
         st.session_state.fetch_status = {"done": True, "success": success, "total": len(codes)}
-
+ 
+with col_storage:
+    st.markdown(f'<div style="padding-top:6px;">{storage_badge}</div>', unsafe_allow_html=True)
+ 
 status = st.session_state.fetch_status
 if status["total"] == 0:
-    st.markdown('<span class="status-badge status-loading">🌐 대기 중</span>', unsafe_allow_html=True)
+    status_badge = '<span class="status-badge status-loading">🌐 대기 중</span>'
 elif status["success"] == status["total"]:
-    st.markdown(f'<span class="status-badge status-success">✅ 시세 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
+    status_badge = f'<span class="status-badge status-success">✅ 시세 연동 성공 ({status["success"]}/{status["total"]})</span>'
 else:
-    st.markdown(f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>', unsafe_allow_html=True)
+    status_badge = f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>'
+ 
+with col_status:
+    st.markdown(f'<div style="padding-top:6px;">{status_badge}</div>', unsafe_allow_html=True)
+ 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
-
+ 
 grand_total = 0
 computed = {}
-
+ 
 for key, df in st.session_state.portfolio.items():
     df_calc = df.copy()
     df_calc["평가금액"] = df_calc["현재가"] * df_calc["보유수량"]
@@ -391,14 +403,14 @@ for key, df in st.session_state.portfolio.items():
         if r["조정수량"] > 0: return f"🔴 +{r['조정수량']:,.0f}주 매수"
         if r["조정수량"] < 0: return f"🔵 {r['조정수량']:,.0f}주 매도"
         return "유지"
-
+ 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
     # 네이버 차트 링크를 순수 텍스트로 대체하여 브라우저 크래시 방지
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
     computed[key] = (df_calc, total_eval, cat_totals)
-
+ 
 summary_cols = st.columns(4)
 with summary_cols[0]:
     st.markdown(f'<div class="summary-card"><label>총 연금 자산 평가액</label><div class="value">{grand_total:,.0f} 원</div></div>', unsafe_allow_html=True)
@@ -406,8 +418,15 @@ for i, key in enumerate(["dc", "pension", "irp"]):
     with summary_cols[i + 1]:
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
-
-tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
+ 
+label_col, tabs_col = st.columns([1, 9], gap="small")
+with label_col:
+    st.markdown(
+        "<div style='font-size:1.05rem; font-weight:800; color:#f8fafc; padding-top:10px; white-space:nowrap;'>🎈포트폴리오</div>",
+        unsafe_allow_html=True,
+    )
+with tabs_col:
+    tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
@@ -417,7 +436,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
         display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
         display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
-
+ 
         gb = GridOptionsBuilder.from_dataframe(display_df)
         gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
         gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
@@ -447,9 +466,9 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             cellRenderer=chart_button_renderer,
             cellStyle={'textAlign': 'center'}
         )
-
+ 
         gridOptions = gb.build()
-
+ 
         try:
             grid_response = AgGrid(
                 display_df,
@@ -460,7 +479,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 fit_columns_on_grid_load=True, 
                 key=f"grid_{key}"
             )
-
+ 
             edited_data = grid_response['data']
             if edited_data is not None:
                 if isinstance(edited_data, dict):
@@ -476,7 +495,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                             return float(s)
                         except ValueError:
                             return 0
-
+ 
                     new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
                     new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
                     new_mas = edited_df["이평선"].values
@@ -505,7 +524,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                         
         except Exception as e:
             st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
-
+ 
         st.write("") 
         chart_col, info_col = st.columns([1, 1.3]) 
         
@@ -526,3 +545,4 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             </div>
             """
             st.markdown(rule_html, unsafe_allow_html=True)
+ 
