@@ -56,15 +56,27 @@ st.markdown(
         }
         .status-loading { background:#78350f; color:#fef3c7; }
         .status-success { background:#065f46; color:#d1fae5; }
-        .stTabs [data-baseweb="tab-list"]::before {
+
+        /* st.radio를 탭처럼 보이게 스타일링 (st.tabs는 숨겨진 탭 내부 컴포넌트가
+           크기 0으로 렌더링되는 버그가 있어 AgGrid와 함께 쓰면 열 너비가 깨진다) */
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: flex; gap: 4px; border-bottom: 1px solid #334155;
+            padding-bottom: 0; align-items: center;
+        }
+        div[data-testid="stRadio"] > div[role="radiogroup"]::before {
             content: "🎈 포트폴리오";
-            display: inline-flex;
-            align-items: center;
-            font-size: 1.05rem;
-            font-weight: 800;
-            color: #f8fafc;
-            margin-right: 28px;
-            white-space: nowrap;
+            font-size: 1.05rem; font-weight: 800; color: #f8fafc;
+            margin-right: 24px; white-space: nowrap;
+        }
+        div[data-testid="stRadio"] label { margin: 0 !important; }
+        div[data-testid="stRadio"] label > div:first-child { display: none; }
+        div[data-testid="stRadio"] label > div:last-child {
+            padding: 10px 16px !important; font-size: 0.95rem !important;
+            font-weight: 700 !important; color: #94a3b8 !important;
+            border-bottom: 2px solid transparent; cursor: pointer;
+        }
+        div[data-testid="stRadio"] label:has(input:checked) > div:last-child {
+            color: #ef4444 !important; border-bottom: 2px solid #ef4444;
         }
     </style>
     """,
@@ -341,6 +353,39 @@ function(params) {
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
+# 네이버 차트 바로가기 버튼 렌더러
+# (문자열 반환 = innerHTML이 아니라 텍스트로 찍힘 / DOM 노드 직접 반환 = React 크래시,
+#  둘 다 이 grid 버전에서는 불안정해서 ag-Grid가 공식 지원하는
+#  클래스형 컴포넌트(init/getGui)로 구현한다 - React를 거치지 않고 ag-Grid 코어가 직접 DOM을 관리한다.)
+chart_button_renderer = JsCode("""
+function ChartButtonRenderer() {}
+ChartButtonRenderer.prototype.init = function(params) {
+    this.eGui = document.createElement('span');
+    if (params.value) {
+        var link = document.createElement('a');
+        link.href = params.value;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.textDecoration = 'none';
+
+        var badge = document.createElement('span');
+        badge.innerText = '📊 차트';
+        badge.style.cssText = 'display:inline-block;background-color:#2563eb;color:#ffffff;' +
+            'padding:3px 12px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;';
+
+        link.appendChild(badge);
+        this.eGui.appendChild(link);
+    }
+};
+ChartButtonRenderer.prototype.getGui = function() {
+    return this.eGui;
+};
+ChartButtonRenderer.prototype.refresh = function(params) {
+    return false;
+};
+ChartButtonRenderer
+""")
+
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
 with header_col1:
@@ -420,143 +465,137 @@ for i, key in enumerate(["dc", "pension", "irp"]):
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
-tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
-for tab, key in zip(tabs, ["dc", "pension", "irp"]):
-    with tab:
-        df_calc, total_eval, cat_totals = computed[key]
-        
-        display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
-        display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
-        display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
-        display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
-        display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
+account_keys = ["dc", "pension", "irp"]
+label_to_key = {ACCOUNT_LABELS[k]: k for k in account_keys}
+selected_label = st.radio(
+    "포트폴리오 계좌 선택",
+    list(label_to_key.keys()),
+    horizontal=True,
+    label_visibility="collapsed",
+    key="account_selector",
+)
+selected_key = label_to_key[selected_label]
 
-        gb = GridOptionsBuilder.from_dataframe(display_df)
-        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'}, resizable=True)
-        gb.configure_column("구분", cellStyle=color_jscode, width=80, editable=False)
-        gb.configure_column("ETF명", width=300, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
-        gb.configure_column("목표비율", width=95, editable=False)
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("현재비율", width=95, editable=False)
+for key in [selected_key]:
+    df_calc, total_eval, cat_totals = computed[key]
         
-        # Selectbox 설정 안전화
-        gb.configure_column(
-            "이평선", 
-            editable=True, 
-            cellEditor="agSelectCellEditor", 
-            cellEditorParams={"values": ["상단", "하단", "-"]}, 
-            cellStyle=ma_color_jscode, 
-            width=95
+    display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
+    display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
+    display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
+    display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
+    display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
+
+    gb = GridOptionsBuilder.from_dataframe(display_df)
+    gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'}, resizable=True)
+    gb.configure_column("구분", cellStyle=color_jscode, width=80, editable=False)
+    gb.configure_column("ETF명", width=300, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
+    gb.configure_column("목표비율", width=95, editable=False)
+    gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("현재비율", width=95, editable=False)
+        
+    # Selectbox 설정 안전화
+    gb.configure_column(
+        "이평선", 
+        editable=True, 
+        cellEditor="agSelectCellEditor", 
+        cellEditorParams={"values": ["상단", "하단", "-"]}, 
+        cellStyle=ma_color_jscode, 
+        width=95
+    )
+        
+    gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
+        
+    # 차트 열: 클래스형 버튼 렌더러 적용
+    gb.configure_column(
+        "차트", width=95, editable=False,
+        cellRenderer=chart_button_renderer,
+        cellStyle={'textAlign': 'center'}
+    )
+
+    gridOptions = gb.build()
+
+    # 표 안 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
+    custom_css = {
+        ".ag-header-cell-label": {"justify-content": "center"},
+    }
+
+    try:
+        grid_response = AgGrid(
+            display_df,
+            gridOptions=gridOptions,
+            update_mode=GridUpdateMode.VALUE_CHANGED, 
+            allow_unsafe_jscode=True, 
+            theme='alpine', 
+            fit_columns_on_grid_load=False,
+            custom_css=custom_css,
+            key=f"grid_{key}"
         )
-        
-        gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
-        
-        # 차트 열: 커스텀 JS 렌더러(버튼)는 이 grid 버전에서 크래시를 유발해 제거하고,
-        # 안정적인 일반 텍스트(클릭은 안 되지만 절대 깨지지 않음)로 표시한다.
-        gb.configure_column(
-            "차트", width=95, editable=False,
-            cellStyle={'textAlign': 'left', 'color': '#60a5fa'}
-        )
 
-        gridOptions = gb.build()
-
-        # 표 안 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
-        custom_css = {
-            ".ag-header-cell-label": {"justify-content": "center"},
-        }
-
-        try:
-            grid_response = AgGrid(
-                display_df,
-                gridOptions=gridOptions,
-                update_mode=GridUpdateMode.VALUE_CHANGED, 
-                allow_unsafe_jscode=True, 
-                theme='alpine', 
-                fit_columns_on_grid_load=False,
-                custom_css=custom_css,
-                key=f"grid_{key}"
-            )
-
-            edited_data = grid_response['data']
-            if edited_data is not None:
-                if isinstance(edited_data, dict):
-                    edited_df = pd.DataFrame(edited_data)
-                else:
-                    edited_df = edited_data
+        edited_data = grid_response['data']
+        if edited_data is not None:
+            if isinstance(edited_data, dict):
+                edited_df = pd.DataFrame(edited_data)
+            else:
+                edited_df = edited_data
                     
-                if not edited_df.empty:
-                    def clean_numeric(val):
-                        if pd.isna(val): return 0
-                        s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
-                        try:
-                            return float(s)
-                        except ValueError:
-                            return 0
+            if not edited_df.empty:
+                def clean_numeric(val):
+                    if pd.isna(val): return 0
+                    s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
+                    try:
+                        return float(s)
+                    except ValueError:
+                        return 0
 
-                    new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
-                    new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
-                    new_mas = edited_df["이평선"].values
+                new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
+                new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
+                new_mas = edited_df["이평선"].values
                     
-                    orig_prices = st.session_state.portfolio[key]["현재가"].values
-                    orig_amounts = st.session_state.portfolio[key]["보유수량"].values
-                    orig_mas = st.session_state.portfolio[key]["이평선"].values
+                orig_prices = st.session_state.portfolio[key]["현재가"].values
+                orig_amounts = st.session_state.portfolio[key]["보유수량"].values
+                orig_mas = st.session_state.portfolio[key]["이평선"].values
                     
-                    if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
-                        st.session_state.portfolio[key]["현재가"] = new_prices
-                        st.session_state.portfolio[key]["보유수량"] = new_amounts
+                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
+                    st.session_state.portfolio[key]["현재가"] = new_prices
+                    st.session_state.portfolio[key]["보유수량"] = new_amounts
                         
-                        updated_mas = []
-                        for idx, row in st.session_state.portfolio[key].iterrows():
-                            etf_name = row["ETF명"]
-                            new_val = new_mas[idx]
-                            updated_mas.append(new_val)
+                    updated_mas = []
+                    for idx, row in st.session_state.portfolio[key].iterrows():
+                        etf_name = row["ETF명"]
+                        new_val = new_mas[idx]
+                        updated_mas.append(new_val)
                             
-                            for other_k in st.session_state.portfolio.keys():
-                                mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
-                                st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
+                        for other_k in st.session_state.portfolio.keys():
+                            mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
+                            st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
                                 
-                        st.session_state.portfolio[key]["이평선"] = updated_mas
-                        save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
-                        st.rerun()
+                    st.session_state.portfolio[key]["이평선"] = updated_mas
+                    save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
+                    st.rerun()
                         
-        except Exception as e:
-            st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
+    except Exception as e:
+        st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
 
-        # 종목 차트 바로가기: AgGrid 내부 커스텀 렌더러는 이 버전에서 불안정해
-        # 순수 Streamlit 위젯(selectbox + link_button)으로 안전하게 구현한다.
-        chart_targets = df_calc[df_calc["코드"] != ""][["ETF명", "차트"]].reset_index(drop=True)
-        pick_col, link_col = st.columns([3, 1])
-        with pick_col:
-            picked_name = st.selectbox(
-                "📊 차트 볼 종목 선택",
-                chart_targets["ETF명"],
-                key=f"chart_pick_{key}",
-                label_visibility="collapsed",
-            )
-        with link_col:
-            picked_url = chart_targets.loc[chart_targets["ETF명"] == picked_name, "차트"].values[0]
-            st.link_button("📊 네이버 차트 열기", picked_url, use_container_width=True)
-
-        st.write("") 
-        chart_col, info_col = st.columns([1, 1.3]) 
+    st.write("") 
+    chart_col, info_col = st.columns([1, 1.3]) 
         
-        with chart_col:
-            st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
-            render_donut(cat_totals, key)
+    with chart_col:
+        st.markdown(f"<h4 style='text-align: center; color: #f8fafc;'>{ACCOUNT_LABELS[key]} 자산 비중</h4>", unsafe_allow_html=True)
+        render_donut(cat_totals, key)
             
-        with info_col:
-            rule_html = """
-            <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
-                <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
-                <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
-                <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
-                <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
-                    <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
-                </ul>
-            </div>
-            """
-            st.markdown(rule_html, unsafe_allow_html=True)
+    with info_col:
+        rule_html = """
+        <div style="background-color: #1e293b; padding: 25px 30px; border-radius: 12px; border: 1px solid #334155; height: 95%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: center;">
+            <h4 style="margin-top: 0; color: #f8fafc; margin-bottom: 18px; font-size: 1.3rem;">⚙️ 리밸런싱 가이드</h4>
+            <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">📌 리밸런싱 주기 : <span style="color:#60a5fa;">매월 1일</span></p>
+            <p style="font-size: 1.1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px;">📌 리밸런싱 방법 :</p>
+            <ul style="font-size: 1.05rem; font-weight: 600; color: #94a3b8; line-height: 1.8; margin-top: 0; padding-left: 25px;">
+                <li><b>일봉차트 120일 이동평균선 <span style="color:#dc2626;">상단</span></b> : 해당 ETF 보유</li>
+                <li><b>일봉차트 120일 이동평균선 <span style="color:#2563eb;">하단</span></b> : 해당 ETF 매각 후 <span style="color:#ffffff; font-weight:800; background-color:#334155; padding:2px 8px; border-radius:6px; margin-left: 4px;">KODEX 미국머니마켓액티브</span>로 변경</li>
+            </ul>
+        </div>
+        """
+        st.markdown(rule_html, unsafe_allow_html=True)
