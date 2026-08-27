@@ -444,6 +444,10 @@ with col_badges:
 
 if st.session_state.get("last_save_error"):
     st.error(f"⚠️ 최근 수정사항이 Google Sheets에 저장되지 못했습니다 (로컬에만 임시 저장됨): {st.session_state['last_save_error']}")
+elif st.session_state.get("last_save_ok"):
+    st.success(f"✅ {st.session_state['last_save_ok']}")
+elif st.session_state.get("last_no_change_debug"):
+    st.info(f"ℹ️ {st.session_state['last_no_change_debug']} (수정한 값이 기존 값과 같거나, 편집이 셀에 반영되기 전에 다른 동작이 발생했을 수 있습니다)")
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
@@ -589,7 +593,17 @@ for key in [selected_key]:
                 if has_changes:
                     st.session_state["data_version"] = st.session_state.get("data_version", 0) + 1
                     save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
+                    if st.session_state.get("last_save_error") is None:
+                        st.session_state["last_save_ok"] = f"'{ACCOUNT_LABELS[key]}' 계좌 저장 완료 (모드: {st.session_state.storage_mode})"
+                    else:
+                        st.session_state["last_save_ok"] = None
                     st.rerun()
+                else:
+                    st.session_state["last_save_ok"] = None
+                    st.session_state["last_save_error"] = None
+                    st.session_state["last_no_change_debug"] = (
+                        f"편집 이벤트는 감지됐지만 값 변화가 없다고 판단됨 (계좌: {ACCOUNT_LABELS[key]})"
+                    )
                         
     except Exception as e:
         st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
