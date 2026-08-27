@@ -218,6 +218,17 @@ function(params) {
 currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
 amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
 
+# 네이버 차트 바로가기 버튼 렌더러 (링크 텍스트 대신 클릭 가능한 버튼 형태로 표시)
+chart_button_renderer = JsCode("""
+function(params) {
+    if (!params.value) { return ''; }
+    return '<a href="' + params.value + '" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">' +
+           '<span style="display:inline-block; background-color:#2563eb; color:#ffffff; ' +
+           'padding:3px 12px; border-radius:6px; font-size:0.82rem; font-weight:700; cursor:pointer;">' +
+           '📊 차트</span></a>';
+}
+""")
+
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
 with header_col1:
@@ -315,8 +326,12 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
         gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
-        # 차트 렌더러 제거 후 기본 URL 텍스트로 표출 (크래시 유발 방지)
-        gb.configure_column("차트", width=150, editable=False, cellStyle={'textAlign': 'left', 'color': '#2563eb'})
+        # 차트 열: 링크를 클릭 가능한 버튼으로 렌더링
+        gb.configure_column(
+            "차트", width=110, editable=False,
+            cellRenderer=chart_button_renderer,
+            cellStyle={'textAlign': 'center'}
+        )
 
         gridOptions = gb.build()
 
