@@ -358,32 +358,34 @@ amount_fmt = JsCode("function(params) { return params.value != null ? Number(par
 #  둘 다 이 grid 버전에서는 불안정해서 ag-Grid가 공식 지원하는
 #  클래스형 컴포넌트(init/getGui)로 구현한다 - React를 거치지 않고 ag-Grid 코어가 직접 DOM을 관리한다.)
 chart_button_renderer = JsCode("""
-function ChartButtonRenderer() {}
-ChartButtonRenderer.prototype.init = function(params) {
-    this.eGui = document.createElement('span');
-    if (params.value) {
-        var link = document.createElement('a');
-        link.href = params.value;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.style.textDecoration = 'none';
+(function() {
+    function ChartButtonRenderer() {}
+    ChartButtonRenderer.prototype.init = function(params) {
+        this.eGui = document.createElement('span');
+        if (params.value) {
+            var link = document.createElement('a');
+            link.href = params.value;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.style.textDecoration = 'none';
 
-        var badge = document.createElement('span');
-        badge.innerText = '📊 차트';
-        badge.style.cssText = 'display:inline-block;background-color:#2563eb;color:#ffffff;' +
-            'padding:3px 12px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;';
+            var badge = document.createElement('span');
+            badge.innerText = '📊 차트';
+            badge.style.cssText = 'display:inline-block;background-color:#2563eb;color:#ffffff;' +
+                'padding:3px 12px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;';
 
-        link.appendChild(badge);
-        this.eGui.appendChild(link);
-    }
-};
-ChartButtonRenderer.prototype.getGui = function() {
-    return this.eGui;
-};
-ChartButtonRenderer.prototype.refresh = function(params) {
-    return false;
-};
-ChartButtonRenderer
+            link.appendChild(badge);
+            this.eGui.appendChild(link);
+        }
+    };
+    ChartButtonRenderer.prototype.getGui = function() {
+        return this.eGui;
+    };
+    ChartButtonRenderer.prototype.refresh = function(params) {
+        return false;
+    };
+    return ChartButtonRenderer;
+})()
 """)
 
 # 헤더 및 시세 호출
