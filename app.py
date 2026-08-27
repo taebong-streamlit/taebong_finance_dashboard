@@ -446,13 +446,6 @@ if st.session_state.get("last_save_error"):
     st.error(f"⚠️ 최근 수정사항이 Google Sheets에 저장되지 못했습니다 (로컬에만 임시 저장됨): {st.session_state['last_save_error']}")
 elif st.session_state.get("last_save_ok"):
     st.success(f"✅ {st.session_state['last_save_ok']}")
-elif st.session_state.get("last_no_change_debug"):
-    debug_text = st.session_state["last_no_change_debug"]
-    summary, _, detail = debug_text.partition(" | ")
-    st.info(f"ℹ️ {summary} (수정한 값이 기존 값과 같거나, 편집이 셀에 반영되기 전에 다른 동작이 발생했을 수 있습니다)")
-    if detail:
-        with st.expander("비교 상세 로그 보기"):
-            st.code(detail.replace(" / ", "\n"))
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
@@ -583,7 +576,6 @@ for key in [selected_key]:
                     except ValueError: return 0
 
                 has_changes = False
-                compare_log = []
                 
                 for idx, row in edited_df.iterrows():
                     new_price = int(clean_numeric(row["현재가"]))
@@ -593,10 +585,6 @@ for key in [selected_key]:
                     orig_price = st.session_state.portfolio[key].at[idx, "현재가"]
                     orig_amount = st.session_state.portfolio[key].at[idx, "보유수량"]
                     orig_ma = st.session_state.portfolio[key].at[idx, "이평선"]
-
-                    compare_log.append(
-                        f"행{idx}: 보유수량 {orig_amount}→{new_amount}, 현재가 {orig_price}→{new_price}, 이평선 {orig_ma}→{new_ma}"
-                    )
                     
                     if new_price != orig_price or new_amount != orig_amount or new_ma != orig_ma:
                         has_changes = True
@@ -620,13 +608,6 @@ for key in [selected_key]:
                     else:
                         st.session_state["last_save_ok"] = None
                     st.rerun()
-                else:
-                    st.session_state["last_save_ok"] = None
-                    st.session_state["last_save_error"] = None
-                    st.session_state["last_no_change_debug"] = (
-                        f"편집 이벤트는 감지됐지만 값 변화가 없다고 판단됨 (계좌: {ACCOUNT_LABELS[key]}) | "
-                        + " / ".join(compare_log)
-                    )
                         
     except Exception as e:
         st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
