@@ -14,6 +14,8 @@ import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from st_aggrid.shared import JsCode
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ==========================================
 # 0. 페이지 기본 설정 및 파일 저장 경로
@@ -93,6 +95,90 @@ DEFAULT_PORTFOLIO = {
     ],
 }
 
+SHEET_COLS = ["구분", "ETF명", "코드", "목표비율", "보유수량", "이평선"]
+
+# ==========================================
+# 2-1. Google Sheets 연동 (secrets가 있으면 사용, 없으면 로컬 파일로 자동 폴백)
+# ==========================================
+import pathlib
+
+_SECRETS_PATHS = [
+    pathlib.Path(".streamlit/secrets.toml"),
+    pathlib.Path.home() / ".streamlit" / "secrets.toml",
+]
+_secrets_file_exists = any(p.exists() for p in _SECRETS_PATHS)
+
+if _secrets_file_exists:
+    try:
+        GSHEET_ENABLED = "gcp_service_account" in st.secrets and "gsheet_url" in st.secrets
+    except Exception:
+        GSHEET_ENABLED = False
+else:
+    # secrets.toml 파일 자체가 없으면 st.secrets 접근을 아예 시도하지 않는다.
+    # (st.secrets는 파일이 없을 때 내부적으로 화면에 에러 박스를 한 번 띄운 뒤 예외를 던지므로,
+    #  단순히 try/except로 감싸는 것만으로는 그 화면 노출을 막을 수 없다.)
+    GSHEET_ENABLED = False
+
+
+@st.cache_resource(show_spinner=False)
+def get_gsheet():
+    creds = Credentials.from_service_account_info(
+        dict(st.secrets["gcp_service_account"]),
+        scopes=["https://www.googleapis.com/auth/spreadsheets"],
+    )
+    gc = gspread.authorize(creds)
+    return gc.open_by_url(st.secrets["gsheet_url"])
+
+
+def _worksheet_to_df(ws, key):
+    records = ws.get_all_records()
+    if not records:
+        raise ValueError("empty sheet")
+    df = pd.DataFrame(records)
+    df["코드"] = df["코드"].astype(str)
+    df["목표비율"] = df["목표비율"].astype(float)
+    df["보유수량"] = df["보유수량"].astype(int)
+    return df
+
+
+def _ensure_worksheet(sh, key):
+    """해당 계좌 탭이 없으면 기본 데이터로 새로 만든다."""
+    try:
+        ws = sh.worksheet(key)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=key, rows=20, cols=len(SHEET_COLS))
+    df = pd.DataFrame(DEFAULT_PORTFOLIO[key])
+    ws.clear()
+    ws.update([SHEET_COLS] + df[SHEET_COLS].values.tolist())
+    return df
+
+
+def load_portfolio_from_gsheet():
+    sh = get_gsheet()
+    portfolio = {}
+    for key in DEFAULT_PORTFOLIO.keys():
+        try:
+            ws = sh.worksheet(key)
+            df = _worksheet_to_df(ws, key)
+        except (gspread.exceptions.WorksheetNotFound, ValueError):
+            df = _ensure_worksheet(sh, key)
+        df["현재가"] = df["코드"].apply(lambda c: 1 if c == "" else 0)
+        portfolio[key] = df
+    return portfolio
+
+
+def save_portfolio_to_gsheet(portfolio_dict):
+    sh = get_gsheet()
+    for key, df in portfolio_dict.items():
+        ws = sh.worksheet(key)
+        sub_df = df[SHEET_COLS].copy()
+        ws.clear()
+        ws.update([SHEET_COLS] + sub_df.values.tolist())
+
+
+# ==========================================
+# 2-2. 로컬 파일 저장 (Google Sheets 미설정 시 폴백용)
+# ==========================================
 def load_portfolio_from_file():
     if os.path.exists(DATA_FILE):
         try:
@@ -129,12 +215,34 @@ def save_portfolio_to_file(portfolio_dict):
     except Exception:
         pass
 
+
+# ==========================================
+# 2-3. 저장소 통합 인터페이스 (Google Sheets 우선, 실패 시 로컬 파일로 자동 전환)
+# ==========================================
+def load_portfolio():
+    if GSHEET_ENABLED:
+        try:
+            return load_portfolio_from_gsheet(), "gsheet"
+        except Exception as e:
+            st.warning(f"⚠️ Google Sheets 연결 실패로 로컬 저장 방식으로 전환합니다: {e}")
+    return load_portfolio_from_file(), "file"
+
+
+def save_portfolio(portfolio_dict, mode):
+    if mode == "gsheet":
+        try:
+            save_portfolio_to_gsheet(portfolio_dict)
+            return
+        except Exception as e:
+            st.warning(f"⚠️ Google Sheets 저장 실패, 이번 변경분은 로컬 파일에 대신 저장합니다: {e}")
+    save_portfolio_to_file(portfolio_dict)
+
 ACCOUNT_LABELS = {"dc": "DC형 퇴직연금", "pension": "연금저축", "irp": "개인형 IRP"}
 ACCOUNT_CSS = {"dc": "card-dc", "pension": "card-pension", "irp": "card-irp"}
 CATEGORY_COLORS = {"주식": "#60a5fa", "채권": "#fb923c", "실물": "#facc15", "리츠": "#34d399", "현금": "#cbd5e1"}
 
 if "portfolio" not in st.session_state:
-    st.session_state.portfolio = load_portfolio_from_file()
+    st.session_state.portfolio, st.session_state.storage_mode = load_portfolio()
 if "fetch_status" not in st.session_state:
     st.session_state.fetch_status = {"done": False, "success": 0, "total": 0}
 
@@ -233,6 +341,13 @@ function(params) {
 header_col1, _ = st.columns([4, 1])
 with header_col1:
     st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
+
+storage_badge = (
+    '<span class="status-badge status-success">☁️ Google Sheets 연동됨 (영구 저장)</span>'
+    if st.session_state.storage_mode == "gsheet"
+    else '<span class="status-badge status-loading">💾 로컬 저장 모드 (재배포 시 초기화될 수 있음)</span>'
+)
+st.markdown(storage_badge, unsafe_allow_html=True)
 
 do_refresh = st.button("🔄 실시간 시세 강제 새로고침", use_container_width=False)
 
@@ -385,7 +500,7 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                                 st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
                                 
                         st.session_state.portfolio[key]["이평선"] = updated_mas
-                        save_portfolio_to_file(st.session_state.portfolio)
+                        save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
                         st.rerun()
                         
         except Exception as e:
