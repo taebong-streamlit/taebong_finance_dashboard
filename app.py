@@ -1,10 +1,3 @@
-"""
-연금계좌 자산배분 & 실시간 리밸런싱 대시보드 (Streamlit)
-- 네이버 금융 실시간 시세 연동
-- 이평선 수정 시 동일 종목 전 계좌 자동 연동
-- AgGrid 프론트엔드 충돌 원인(Custom CSS 및 불안정 JS) 완전 제거본
-"""
-
 import os
 import json
 import requests
@@ -13,7 +6,6 @@ import streamlit as st
 import plotly.graph_objects as go
 from bs4 import BeautifulSoup
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from st_aggrid.shared import JsCode
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -56,9 +48,6 @@ st.markdown(
         }
         .status-loading { background:#78350f; color:#fef3c7; }
         .status-success { background:#065f46; color:#d1fae5; }
-
-        /* st.radio를 탭처럼 보이게 스타일링 (st.tabs는 숨겨진 탭 내부 컴포넌트가
-           크기 0으로 렌더링되는 버그가 있어 AgGrid와 함께 쓰면 열 너비가 깨진다) */
         div[data-testid="stRadio"] > div[role="radiogroup"] {
             display: flex; gap: 4px; border-bottom: 1px solid #334155;
             padding-bottom: 0; align-items: center;
@@ -125,10 +114,9 @@ DEFAULT_PORTFOLIO = {
 SHEET_COLS = ["구분", "ETF명", "코드", "목표비율", "보유수량", "이평선"]
 
 # ==========================================
-# 2-1. Google Sheets 연동 (secrets가 있으면 사용, 없으면 로컬 파일로 자동 폴백)
+# 2-1. Google Sheets 연동
 # ==========================================
 import pathlib
-
 _SECRETS_PATHS = [
     pathlib.Path(".streamlit/secrets.toml"),
     pathlib.Path.home() / ".streamlit" / "secrets.toml",
@@ -141,11 +129,7 @@ if _secrets_file_exists:
     except Exception:
         GSHEET_ENABLED = False
 else:
-    # secrets.toml 파일 자체가 없으면 st.secrets 접근을 아예 시도하지 않는다.
-    # (st.secrets는 파일이 없을 때 내부적으로 화면에 에러 박스를 한 번 띄운 뒤 예외를 던지므로,
-    #  단순히 try/except로 감싸는 것만으로는 그 화면 노출을 막을 수 없다.)
     GSHEET_ENABLED = False
-
 
 @st.cache_resource(show_spinner=False)
 def get_gsheet():
@@ -155,7 +139,6 @@ def get_gsheet():
     )
     gc = gspread.authorize(creds)
     return gc.open_by_url(st.secrets["gsheet_url"])
-
 
 def _worksheet_to_df(ws, key):
     records = ws.get_all_records()
@@ -167,9 +150,7 @@ def _worksheet_to_df(ws, key):
     df["보유수량"] = df["보유수량"].astype(int)
     return df
 
-
 def _ensure_worksheet(sh, key):
-    """해당 계좌 탭이 없으면 기본 데이터로 새로 만든다."""
     try:
         ws = sh.worksheet(key)
     except gspread.exceptions.WorksheetNotFound:
@@ -178,7 +159,6 @@ def _ensure_worksheet(sh, key):
     ws.clear()
     ws.update([SHEET_COLS] + df[SHEET_COLS].values.tolist())
     return df
-
 
 def load_portfolio_from_gsheet():
     sh = get_gsheet()
@@ -193,7 +173,6 @@ def load_portfolio_from_gsheet():
         portfolio[key] = df
     return portfolio
 
-
 def save_portfolio_to_gsheet(portfolio_dict):
     sh = get_gsheet()
     for key, df in portfolio_dict.items():
@@ -202,9 +181,8 @@ def save_portfolio_to_gsheet(portfolio_dict):
         ws.clear()
         ws.update([SHEET_COLS] + sub_df.values.tolist())
 
-
 # ==========================================
-# 2-2. 로컬 파일 저장 (Google Sheets 미설정 시 폴백용)
+# 2-2. 로컬 파일 저장
 # ==========================================
 def load_portfolio_from_file():
     if os.path.exists(DATA_FILE):
@@ -242,10 +220,6 @@ def save_portfolio_to_file(portfolio_dict):
     except Exception:
         pass
 
-
-# ==========================================
-# 2-3. 저장소 통합 인터페이스 (Google Sheets 우선, 실패 시 로컬 파일로 자동 전환)
-# ==========================================
 def load_portfolio():
     if GSHEET_ENABLED:
         try:
@@ -253,7 +227,6 @@ def load_portfolio():
         except Exception as e:
             st.warning(f"⚠️ Google Sheets 연결 실패로 로컬 저장 방식으로 전환합니다: {e}")
     return load_portfolio_from_file(), "file"
-
 
 def save_portfolio(portfolio_dict, mode):
     if mode == "gsheet":
@@ -325,68 +298,6 @@ def render_donut(cat_totals: dict, key: str):
     )
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{key}")
 
-# 매우 안전한 자바스크립트 적용 (null 방어코드 추가)
-color_jscode = JsCode("""
-function(params) {
-    if (!params.value) return {'textAlign': 'center', 'color': '#000'};
-    var val = params.value;
-    if (val === '주식') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '채권') { return {'color': '#d97706', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '실물') { return {'color': '#ca8a04', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '리츠') { return {'color': '#059669', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '현금') { return {'color': '#475569', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    return {'textAlign': 'center', 'color': '#000000'};
-}
-""")
-
-ma_color_jscode = JsCode("""
-function(params) {
-    if (!params.value) return {'textAlign': 'center', 'color': '#64748b'};
-    var val = params.value;
-    if (val === '상단') { return {'color': '#dc2626', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    if (val === '하단') { return {'color': '#2563eb', 'fontWeight': 'bold', 'textAlign': 'center'}; }
-    return {'textAlign': 'center', 'color': '#64748b'};
-}
-""")
-
-# 안전한 숫자 포맷팅 JS
-currency_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 원' : ''; }")
-amount_fmt = JsCode("function(params) { return params.value != null ? Number(params.value).toLocaleString() + ' 주' : ''; }")
-
-# 네이버 차트 바로가기 버튼 렌더러
-# (문자열 반환 = innerHTML이 아니라 텍스트로 찍힘 / DOM 노드 직접 반환 = React 크래시,
-#  둘 다 이 grid 버전에서는 불안정해서 ag-Grid가 공식 지원하는
-#  클래스형 컴포넌트(init/getGui)로 구현한다 - React를 거치지 않고 ag-Grid 코어가 직접 DOM을 관리한다.)
-chart_button_renderer = JsCode("""
-(function() {
-    function ChartButtonRenderer() {}
-    ChartButtonRenderer.prototype.init = function(params) {
-        this.eGui = document.createElement('span');
-        if (params.value) {
-            var link = document.createElement('a');
-            link.href = params.value;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.style.textDecoration = 'none';
-
-            var badge = document.createElement('span');
-            badge.innerText = '📊 차트';
-            badge.style.cssText = 'display:inline-block;background-color:#2563eb;color:#ffffff;' +
-                'padding:3px 12px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;';
-
-            link.appendChild(badge);
-            this.eGui.appendChild(link);
-        }
-    };
-    ChartButtonRenderer.prototype.getGui = function() {
-        return this.eGui;
-    };
-    ChartButtonRenderer.prototype.refresh = function(params) {
-        return false;
-    };
-    return ChartButtonRenderer;
-})()
-""")
 
 # 헤더 및 시세 호출
 header_col1, _ = st.columns([4, 1])
@@ -453,7 +364,6 @@ for key, df in st.session_state.portfolio.items():
         return "유지"
 
     df_calc["조정필요"] = df_calc.apply(rebalance_text, axis=1)
-    # 네이버 차트 링크를 순수 텍스트로 대체하여 브라우저 크래시 방지
     df_calc["차트"] = df_calc["코드"].apply(lambda c: f"https://finance.naver.com/item/fchart.naver?code={c}" if c else "")
     
     cat_totals = df_calc.groupby("구분")["평가금액"].sum().to_dict()
@@ -482,6 +392,8 @@ for key in [selected_key]:
     df_calc, total_eval, cat_totals = computed[key]
         
     display_df = df_calc[['구분', 'ETF명', '목표비율', '현재가', '보유수량', '평가금액', '현재비율', '이평선', '목표수량', '조정필요', '차트']].copy()
+    
+    # 안정적인 숫자 편집을 위해 편집 가능한 컬럼(현재가, 보유수량)은 포맷팅하지 않고 그대로 둡니다.
     display_df['현재비율'] = display_df['현재비율'].apply(lambda x: f"{x:.1f}%")
     display_df['목표비율'] = display_df['목표비율'].apply(lambda x: f"{x * 100:.0f}%")
     display_df['평가금액'] = display_df['평가금액'].apply(lambda x: f"{x:,.0f} 원")
@@ -489,52 +401,36 @@ for key in [selected_key]:
 
     gb = GridOptionsBuilder.from_dataframe(display_df)
     gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'}, resizable=True)
-    gb.configure_column("구분", cellStyle=color_jscode, width=80, editable=False)
+    
+    gb.configure_column("구분", width=80, editable=False)
     gb.configure_column("ETF명", width=300, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
     gb.configure_column("목표비율", width=95, editable=False)
-    gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
-    gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("현재가", editable=True, type=["numericColumn"], width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
+    gb.configure_column("보유수량", editable=True, type=["numericColumn"], width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("현재비율", width=95, editable=False)
         
-    # Selectbox 설정 안전화
     gb.configure_column(
         "이평선", 
         editable=True, 
         cellEditor="agSelectCellEditor", 
         cellEditorParams={"values": ["상단", "하단", "-"]}, 
-        cellStyle=ma_color_jscode, 
         width=95
     )
         
     gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
     gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
-        
-    # 차트 열: 클래스형 버튼 렌더러 적용 (이름으로 등록해서 참조 - ag-grid-react가
-    # 인라인으로 넘긴 렌더러를 인식 못하고 무시하는 문제를 피하기 위함)
-    gb.configure_column(
-        "차트", width=95, editable=False,
-        cellRenderer="chartButtonRenderer",
-        cellStyle={'textAlign': 'center'}
-    )
+    gb.configure_column("차트", width=95, editable=False, cellStyle={'textAlign': 'left', 'color': '#60a5fa'})
 
     gridOptions = gb.build()
-    gridOptions["components"] = {"chartButtonRenderer": chart_button_renderer}
-
-    # 표 안 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
-    custom_css = {
-        ".ag-header-cell-label": {"justify-content": "center"},
-    }
 
     try:
         grid_response = AgGrid(
             display_df,
             gridOptions=gridOptions,
             update_mode=GridUpdateMode.VALUE_CHANGED, 
-            allow_unsafe_jscode=True, 
             theme='alpine', 
             fit_columns_on_grid_load=False,
-            custom_css=custom_css,
             key=f"grid_{key}"
         )
 
@@ -549,39 +445,57 @@ for key in [selected_key]:
                 def clean_numeric(val):
                     if pd.isna(val): return 0
                     s = str(val).replace(',', '').replace('원', '').replace('주', '').replace('%', '').strip()
-                    try:
-                        return float(s)
-                    except ValueError:
-                        return 0
+                    try: return float(s)
+                    except ValueError: return 0
 
-                new_prices = edited_df["현재가"].apply(clean_numeric).astype(int).values
-                new_amounts = edited_df["보유수량"].apply(clean_numeric).astype(int).values
-                new_mas = edited_df["이평선"].values
+                has_changes = False
+                
+                # 안정적인 반복 처리 및 전 계좌 자동 동기화 로직
+                for idx, row in edited_df.iterrows():
+                    new_price = int(clean_numeric(row["현재가"]))
+                    new_amount = int(clean_numeric(row["보유수량"]))
+                    new_ma = row["이평선"]
                     
-                orig_prices = st.session_state.portfolio[key]["현재가"].values
-                orig_amounts = st.session_state.portfolio[key]["보유수량"].values
-                orig_mas = st.session_state.portfolio[key]["이평선"].values
+                    orig_price = st.session_state.portfolio[key].at[idx, "현재가"]
+                    orig_amount = st.session_state.portfolio[key].at[idx, "보유수량"]
+                    orig_ma = st.session_state.portfolio[key].at[idx, "이평선"]
                     
-                if not (new_prices == orig_prices).all() or not (new_amounts == orig_amounts).all() or not (new_mas == orig_mas).all():
-                    st.session_state.portfolio[key]["현재가"] = new_prices
-                    st.session_state.portfolio[key]["보유수량"] = new_amounts
+                    if new_price != orig_price or new_amount != orig_amount or new_ma != orig_ma:
+                        has_changes = True
+                        # 현재 보고 있는 계좌 업데이트
+                        st.session_state.portfolio[key].at[idx, "현재가"] = new_price
+                        st.session_state.portfolio[key].at[idx, "보유수량"] = new_amount
+                        st.session_state.portfolio[key].at[idx, "이평선"] = new_ma
                         
-                    updated_mas = []
-                    for idx, row in st.session_state.portfolio[key].iterrows():
-                        etf_name = row["ETF명"]
-                        new_val = new_mas[idx]
-                        updated_mas.append(new_val)
-                            
-                        for other_k in st.session_state.portfolio.keys():
-                            mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
-                            st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_val
-                                
-                    st.session_state.portfolio[key]["이평선"] = updated_mas
+                        # 이평선이 변경되었을 경우: 동일한 ETF명을 가진 모든 계좌 동기화
+                        if new_ma != orig_ma:
+                            etf_name = row["ETF명"]
+                            for other_k in st.session_state.portfolio.keys():
+                                if other_k != key:
+                                    mask = st.session_state.portfolio[other_k]["ETF명"] == etf_name
+                                    if mask.any():
+                                        st.session_state.portfolio[other_k].loc[mask, "이평선"] = new_ma
+                
+                # 변경사항 발생 시 즉각 저장 후 재실행
+                if has_changes:
                     save_portfolio(st.session_state.portfolio, st.session_state.storage_mode)
                     st.rerun()
                         
     except Exception as e:
         st.error(f"표를 렌더링하는 중 에러가 발생했습니다: {e}")
+
+    chart_targets = df_calc[df_calc["코드"] != ""][["ETF명", "차트"]].reset_index(drop=True)
+    pick_col, link_col = st.columns([3, 1])
+    with pick_col:
+        picked_name = st.selectbox(
+            "📊 차트 볼 종목 선택",
+            chart_targets["ETF명"],
+            key=f"chart_pick_{key}",
+            label_visibility="collapsed",
+        )
+    with link_col:
+        picked_url = chart_targets.loc[chart_targets["ETF명"] == picked_name, "차트"].values[0]
+        st.link_button("📊 네이버 차트 열기", picked_url, use_container_width=True)
 
     st.write("") 
     chart_col, info_col = st.columns([1, 1.3]) 
