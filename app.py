@@ -49,9 +49,23 @@ st.markdown(
         .card-dc { border-left-color:#3b82f6; } 
         .card-pension { border-left-color:#10b981; } 
         .card-irp { border-left-color:#8b5cf6; } 
-        .status-badge { font-size:0.68rem; padding:3px 10px; border-radius:12px; font-weight:600; white-space:nowrap; display:inline-block; }
+        .status-badge {
+            font-size:0.78rem; padding:5px 14px; border-radius:14px; font-weight:700;
+            white-space:nowrap; display:inline-flex; align-items:center; gap:5px;
+            letter-spacing:0.2px; box-shadow:0 2px 6px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08);
+        }
         .status-loading { background:#78350f; color:#fef3c7; }
-        .status-success { background:#064e3b; color:#d1fae5; }
+        .status-success { background:#065f46; color:#d1fae5; }
+        .stTabs [data-baseweb="tab-list"]::before {
+            content: "🎈 포트폴리오";
+            display: inline-flex;
+            align-items: center;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #f8fafc;
+            margin-right: 28px;
+            white-space: nowrap;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -344,12 +358,12 @@ with header_col1:
     st.markdown("<h1 style='font-size:2.8rem; font-weight:800; color:#ffffff; margin-top: 5px; margin-bottom: 20px; line-height: 1.4;'>📈 태봉의 연금자산 관리</h1>", unsafe_allow_html=True)
 
 storage_badge = (
-    '<span class="status-badge status-success">☁️ Sheets 연동됨</span>'
+    '<span class="status-badge status-success">✅ Sheets 연동됨</span>'
     if st.session_state.storage_mode == "gsheet"
     else '<span class="status-badge status-loading">💾 로컬 저장 모드</span>'
 )
 
-col_btn, col_storage, col_status = st.columns([1.4, 1.1, 1.5], gap="small")
+col_btn, col_spacer, col_badges = st.columns([1.4, 3.6, 3], gap="small")
 
 with col_btn:
     do_refresh = st.button("🔄 시세 새로고침", use_container_width=False)
@@ -366,9 +380,6 @@ if not st.session_state.fetch_status["done"] or do_refresh:
             df["현재가"] = df.apply(lambda r: prices.get(r["코드"], r["현재가"]) if r["코드"] else 1, axis=1)
         st.session_state.fetch_status = {"done": True, "success": success, "total": len(codes)}
 
-with col_storage:
-    st.markdown(f'<div style="padding-top:6px;">{storage_badge}</div>', unsafe_allow_html=True)
-
 status = st.session_state.fetch_status
 if status["total"] == 0:
     status_badge = '<span class="status-badge status-loading">🌐 대기 중</span>'
@@ -377,8 +388,11 @@ elif status["success"] == status["total"]:
 else:
     status_badge = f'<span class="status-badge status-loading">⚠️ 일부 연동 성공 ({status["success"]}/{status["total"]})</span>'
 
-with col_status:
-    st.markdown(f'<div style="padding-top:6px;">{status_badge}</div>', unsafe_allow_html=True)
+with col_badges:
+    st.markdown(
+        f'<div style="display:flex; justify-content:flex-end; gap:8px; padding-top:6px;">{storage_badge}{status_badge}</div>',
+        unsafe_allow_html=True,
+    )
 
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
@@ -417,14 +431,7 @@ for i, key in enumerate(["dc", "pension", "irp"]):
         st.markdown(f'<div class="summary-card {ACCOUNT_CSS[key]}"><label>{ACCOUNT_LABELS[key]}</label><div class="value">{computed[key][1]:,.0f} 원</div></div>', unsafe_allow_html=True)
 st.markdown("<hr style='margin:0.3rem 0; border-color:#334155;'>", unsafe_allow_html=True)
 
-label_col, tabs_col = st.columns([1, 9], gap="small")
-with label_col:
-    st.markdown(
-        "<div style='font-size:1.05rem; font-weight:800; color:#f8fafc; padding-top:10px; white-space:nowrap;'>🎈포트폴리오</div>",
-        unsafe_allow_html=True,
-    )
-with tabs_col:
-    tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
+tabs = st.tabs([ACCOUNT_LABELS[k] for k in ["dc", "pension", "irp"]])
 for tab, key in zip(tabs, ["dc", "pension", "irp"]):
     with tab:
         df_calc, total_eval, cat_totals = computed[key]
@@ -436,14 +443,14 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
         display_df['목표수량'] = display_df['목표수량'].apply(lambda x: f"{x:,.0f} 주")
 
         gb = GridOptionsBuilder.from_dataframe(display_df)
-        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'})
-        gb.configure_column("구분", cellStyle=color_jscode, width=90, editable=False)
-        gb.configure_column("ETF명", width=340, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
-        gb.configure_column("목표비율", width=100, editable=False)
-        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=130, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("평가금액", width=150, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("현재비율", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_default_column(cellStyle={'textAlign': 'center', 'color': '#000000'}, resizable=True)
+        gb.configure_column("구분", cellStyle=color_jscode, width=80, editable=False)
+        gb.configure_column("ETF명", width=300, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000', 'fontWeight': '600'})
+        gb.configure_column("목표비율", width=95, editable=False)
+        gb.configure_column("현재가", editable=True, type=["numericColumn"], valueFormatter=currency_fmt, width=115, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("보유수량", editable=True, type=["numericColumn"], valueFormatter=amount_fmt, width=110, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("평가금액", width=140, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("현재비율", width=95, editable=False)
         
         # Selectbox 설정 안전화
         gb.configure_column(
@@ -452,20 +459,25 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
             cellEditor="agSelectCellEditor", 
             cellEditorParams={"values": ["상단", "하단", "-"]}, 
             cellStyle=ma_color_jscode, 
-            width=120
+            width=95
         )
         
-        gb.configure_column("목표수량", width=130, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
-        gb.configure_column("조정필요", width=170, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
+        gb.configure_column("목표수량", width=110, editable=False, cellStyle={'textAlign': 'right', 'color': '#000000'})
+        gb.configure_column("조정필요", width=175, editable=False, cellStyle={'textAlign': 'left', 'color': '#000000'})
         
         # 차트 열: 링크를 클릭 가능한 버튼으로 렌더링
         gb.configure_column(
-            "차트", width=110, editable=False,
+            "차트", width=95, editable=False,
             cellRenderer=chart_button_renderer,
             cellStyle={'textAlign': 'center'}
         )
 
         gridOptions = gb.build()
+
+        # 표 안 헤더(구분, ETF명 등) 텍스트를 모두 중앙정렬
+        custom_css = {
+            ".ag-header-cell-label": {"justify-content": "center"},
+        }
 
         try:
             grid_response = AgGrid(
@@ -474,7 +486,8 @@ for tab, key in zip(tabs, ["dc", "pension", "irp"]):
                 update_mode=GridUpdateMode.VALUE_CHANGED, 
                 allow_unsafe_jscode=True, 
                 theme='alpine', 
-                fit_columns_on_grid_load=True, 
+                fit_columns_on_grid_load=False,
+                custom_css=custom_css,
                 key=f"grid_{key}"
             )
 
