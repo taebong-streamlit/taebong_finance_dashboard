@@ -74,6 +74,51 @@ st.markdown(
 )
 
 # ==========================================
+# 1-1. 접속 비밀번호 확인
+# ==========================================
+import pathlib
+_SECRETS_PATHS = [
+    pathlib.Path(".streamlit/secrets.toml"),
+    pathlib.Path.home() / ".streamlit" / "secrets.toml",
+]
+_secrets_file_exists = any(p.exists() for p in _SECRETS_PATHS)
+
+if _secrets_file_exists:
+    try:
+        APP_PASSWORD = st.secrets.get("app_password")
+    except Exception:
+        APP_PASSWORD = None
+else:
+    APP_PASSWORD = None
+
+
+def _check_password() -> bool:
+    if not APP_PASSWORD:
+        # secrets에 app_password가 설정되어 있지 않으면 비밀번호 없이 그냥 통과시킨다.
+        return True
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.markdown(
+        "<h2 style='text-align:center; margin-top:8rem; color:#f8fafc;'>🔒 태봉의 연금자산 관리</h2>",
+        unsafe_allow_html=True,
+    )
+    _, mid, _ = st.columns([1, 1, 1])
+    with mid:
+        pw = st.text_input("비밀번호", type="password", key="password_input", label_visibility="collapsed", placeholder="비밀번호를 입력하세요")
+        if st.button("입장", use_container_width=True) or pw:
+            if pw == APP_PASSWORD:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            elif pw:
+                st.error("비밀번호가 틀렸습니다.")
+    return False
+
+
+if not _check_password():
+    st.stop()
+
+# ==========================================
 # 1-2. AgGrid 렌더러 안전 JS 설정 (차트 버튼)
 # ==========================================
 chart_button_jscode = JsCode("""
@@ -214,13 +259,6 @@ SHEET_COLS = ["구분", "ETF명", "코드", "목표비율", "보유수량", "이
 # ==========================================
 # 2-1. Google Sheets 연동
 # ==========================================
-import pathlib
-_SECRETS_PATHS = [
-    pathlib.Path(".streamlit/secrets.toml"),
-    pathlib.Path.home() / ".streamlit" / "secrets.toml",
-]
-_secrets_file_exists = any(p.exists() for p in _SECRETS_PATHS)
-
 if _secrets_file_exists:
     try:
         GSHEET_ENABLED = "gcp_service_account" in st.secrets and "gsheet_url" in st.secrets
